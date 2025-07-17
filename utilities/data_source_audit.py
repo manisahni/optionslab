@@ -61,17 +61,17 @@ class DataSourceAuditor:
                 'expected_format': 'csv'
             },
             'streamlit_results': {
-                'paths': ['streamlit-backtester/backtest_results', 'backtest_results'],
+                'paths': ['optionslab-ui/backtest_results', 'backtest_results'],
                 'patterns': ['*.json'],
                 'expected_format': 'json'
             },
             'streamlit_temp_logs': {
-                'paths': ['streamlit-backtester/tmp_trade_logs', 'tmp_trade_logs'],
+                'paths': ['optionslab-ui/tmp_trade_logs', 'tmp_trade_logs'],
                 'patterns': ['*.csv', '*.log'],
                 'expected_format': 'csv'
             },
             'enhanced_logs': {
-                'paths': ['streamlit-backtester/trade_logs', 'trade_logs'],
+                'paths': ['optionslab-ui/trade_logs', 'trade_logs'],
                 'patterns': ['*.json', '*.pickle'],
                 'expected_format': 'json'
             },

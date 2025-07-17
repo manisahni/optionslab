@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 # Add path for streamlit modules
-sys.path.append(str(Path(__file__).parent.parent / "streamlit-backtester"))
+sys.path.append(str(Path(__file__).parent.parent / "optionslab-ui"))
 
 # Import advanced exit modules if available
 try:

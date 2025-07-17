@@ -15,14 +15,14 @@ import json
 from typing import Dict, Any, List
 
 # Add paths for imports
-sys.path.append(str(Path(__file__).parent / "spy_backtester"))
-sys.path.append(str(Path(__file__).parent / "streamlit-backtester"))
+sys.path.append(str(Path(__file__).parent / "optionslab-core"))
+sys.path.append(str(Path(__file__).parent / "optionslab-ui"))
 
 # Import all components to test
 from core.strategy_config_manager import StrategyConfigManager
 from core.advanced_exit_manager import AdvancedExitManager
 from core.volatility_stop_calculator import VolatilityStopCalculator
-from spy_backtester.greeks_tracker import GreeksTracker, GreeksSnapshot
+from optionslab_core.greeks_tracker import GreeksTracker, GreeksSnapshot
 from spy_backtester.strategy_base import SimpleStrategy
 from spy_backtester.portfolio_manager import PortfolioManager
 from spy_backtester.config import DEFAULT_PARAMS

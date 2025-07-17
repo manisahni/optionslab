@@ -1,0 +1,13 @@
+# File: docs/ThetaData_API_Summary.txt
+
+# ThetaData API Summary
+
+## REST Endpoints
+- `/v2/list/contracts`: list option chains
+- `/v2/history/options`: fetch historical IV data
+…
+
+## Streaming
+- `/stream/quotes`: real-time quotes
+- `/stream/trades`: real-time trades
+…

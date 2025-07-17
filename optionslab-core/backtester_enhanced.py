@@ -13,7 +13,7 @@ import json
 
 # Add current directory to path for imports
 sys.path.append(str(Path(__file__).parent))
-sys.path.append(str(Path(__file__).parent.parent / "streamlit-backtester"))
+sys.path.append(str(Path(__file__).parent.parent / "optionslab-ui"))
 
 from data_loader import SPYDataLoader
 from portfolio_manager import PortfolioManager
@@ -719,8 +719,8 @@ def validate_inputs(args) -> bool:
             search_paths = [
                 Path("config/strategies") / args.yaml_config,
                 Path("strategy_templates") / args.yaml_config,
-                Path("../streamlit-backtester/config/strategies") / args.yaml_config,
-                Path("../streamlit-backtester/strategy_templates") / args.yaml_config
+                Path("../optionslab-ui/config/strategies") / args.yaml_config,
+                Path("../optionslab-ui/strategy_templates") / args.yaml_config
             ]
             
             found = False
@@ -807,8 +807,8 @@ def list_yaml_configs():
     config_dirs = [
         ("Strategy Configs", Path("config/strategies")),
         ("Strategy Templates", Path("strategy_templates")),
-        ("Streamlit Configs", Path("../streamlit-backtester/config/strategies")),
-        ("Streamlit Templates", Path("../streamlit-backtester/strategy_templates"))
+        ("Streamlit Configs", Path("../optionslab-ui/config/strategies")),
+        ("Streamlit Templates", Path("../optionslab-ui/strategy_templates"))
     ]
     
     found_any = False

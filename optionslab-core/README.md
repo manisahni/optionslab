@@ -1,6 +1,6 @@
-# SPY Options Backtester
+# OptionsLab Core
 
-A comprehensive command-line tool for backtesting options trading strategies using historical SPY options data.
+A comprehensive command-line backtesting engine for options trading strategies. The core engine of the OptionsLab system.
 
 ## Features
 

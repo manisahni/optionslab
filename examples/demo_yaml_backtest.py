@@ -13,8 +13,8 @@ import pandas as pd
 import yaml
 
 # Add paths
-sys.path.append(str(Path(__file__).parent / "spy_backtester"))
-sys.path.append(str(Path(__file__).parent / "streamlit-backtester"))
+sys.path.append(str(Path(__file__).parent / "optionslab-core"))
+sys.path.append(str(Path(__file__).parent / "optionslab-ui"))
 
 def print_section(title: str):
     """Print a section header"""
@@ -31,9 +31,9 @@ def demo_yaml_cli():
     print("\n1️⃣ Available YAML configurations:")
     
     config_dirs = [
-        Path("spy_backtester/config/strategies"),
-        Path("streamlit-backtester/config/strategies"),
-        Path("streamlit-backtester/strategy_templates")
+        Path("optionslab-core/config/strategies"),
+        Path("optionslab-ui/config/strategies"),
+        Path("optionslab-ui/strategy_templates")
     ]
     
     yaml_files = []
@@ -50,7 +50,7 @@ def demo_yaml_cli():
     
     # Demo: List available configs
     print("\n2️⃣ List YAML configurations using CLI:")
-    cmd = ["python", "spy_backtester/backtester_enhanced.py", "--list-yaml"]
+    cmd = ["python", "optionslab-core/backtester_enhanced.py", "--list-yaml"]
     print(f"   Command: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.stdout:
@@ -70,7 +70,7 @@ def demo_yaml_cli():
     start_date = end_date - timedelta(days=30)
     
     cmd = [
-        "python", "spy_backtester/backtester_enhanced.py",
+        "python", "optionslab-core/backtester_enhanced.py",
         "--yaml-config", yaml_file,
         "--start-date", start_date.strftime("%Y%m%d"),
         "--end-date", end_date.strftime("%Y%m%d")
@@ -116,7 +116,7 @@ def demo_streamlit_yaml():
     print("   5. Advanced features indicators")
     
     print("\n🚀 To launch Streamlit with YAML support:")
-    print("   cd streamlit-backtester")
+    print("   cd optionslab-ui")
     print("   streamlit run streamlit_app.py")
     
     print("\n📋 In the Streamlit UI:")
@@ -132,7 +132,7 @@ def demo_advanced_features():
     print_section("DEMO: Advanced Exit Features")
     
     # Load and display an advanced YAML config
-    yaml_path = Path("spy_backtester/config/strategies/long_put_dynamic_stops.yaml")
+    yaml_path = Path("optionslab-core/config/strategies/long_put_dynamic_stops.yaml")
     
     if yaml_path.exists():
         print(f"\n📄 Loading: {yaml_path}")
@@ -257,7 +257,7 @@ def create_example_yaml():
     }
     
     # Save example YAML
-    output_dir = Path("spy_backtester/config/strategies")
+    output_dir = Path("optionslab-core/config/strategies")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / "example_advanced_strategy.yaml"
     

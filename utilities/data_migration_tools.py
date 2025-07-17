@@ -579,8 +579,8 @@ class MigrationManager:
         """Migrate all known legacy data directories."""
         
         known_sources = [
-            (base_dir / "spy_backtester" / "results", ["*.csv"]),
-            (base_dir / "streamlit-backtester" / "backtest_results", ["*.json"]),
+            (base_dir / "optionslab-core" / "results", ["*.csv"]),
+            (base_dir / "optionslab-ui" / "backtest_results", ["*.json"]),
             (base_dir / "results", ["*.csv", "*.json"]),
             (base_dir / "backtest_results", ["*.csv", "*.json"])
         ]
