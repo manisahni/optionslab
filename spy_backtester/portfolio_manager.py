@@ -1,5 +1,5 @@
 """
-Portfolio management for options backtesting
+Portfolio management for options backtesting with enhanced Greeks tracking
 """
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
@@ -7,9 +7,13 @@ import pandas as pd
 import numpy as np
 from dataclasses import dataclass
 import uuid
+import logging
 
 from strategy_base import Trade, Position, OrderType, PositionType
 from config import COMMISSION_PER_CONTRACT, BID_ASK_SPREAD_FACTOR
+from greeks_tracker import GreeksTracker
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,15 +29,19 @@ class PortfolioSnapshot:
 
 
 class PortfolioManager:
-    """Manages portfolio state and executes trades"""
+    """Manages portfolio state and executes trades with Greeks tracking"""
     
-    def __init__(self, initial_capital: float = 100000):
+    def __init__(self, initial_capital: float = 100000, track_greeks: bool = True):
         self.initial_capital = initial_capital
         self.cash = initial_capital
         self.positions: Dict[str, Position] = {}
         self.trades: List[Trade] = []
         self.snapshots: List[PortfolioSnapshot] = []
         self.trade_counter = 0
+        
+        # Greeks tracking
+        self.track_greeks = track_greeks
+        self.greeks_tracker = GreeksTracker() if track_greeks else None
         
     def execute_trade(self, option_data: pd.Series, quantity: int, 
                      order_type: OrderType, date: datetime, 
@@ -119,6 +127,16 @@ class PortfolioManager:
         # Add to trades list
         self.trades.append(trade)
         
+        # Initialize Greeks tracking for new positions
+        if self.track_greeks and order_type in [OrderType.BUY_TO_OPEN, OrderType.SELL_TO_OPEN]:
+            position_key = f"{trade.option_type}_{trade.strike}_{trade.expiration.strftime('%Y%m%d')}"
+            self.greeks_tracker.create_position_tracking(
+                position_id=position_key,
+                entry_data={'timestamp': date},
+                option_data=option_data,
+                quantity=quantity if order_type == OrderType.BUY_TO_OPEN else -quantity
+            )
+        
         return trade
     
     def close_trade_with_exit_data(self, opening_trade: Trade, option_data: pd.Series, 
@@ -148,6 +166,17 @@ class PortfolioManager:
                     time_decay_threshold=time_decay_threshold,
                     min_dte_exit=5,  # Optimal to exit when > 5 DTE (avoid pin risk)
                     max_dte_exit=max_dte_exit
+                )
+            
+            # Update Greeks tracking for closed position
+            if self.track_greeks:
+                position_key = f"{opening_trade.option_type}_{opening_trade.strike}_{opening_trade.expiration.strftime('%Y%m%d')}"
+                self.greeks_tracker.close_position_tracking(
+                    position_id=position_key,
+                    exit_data=option_data,
+                    quantity=quantity if order_type == OrderType.BUY_TO_CLOSE else -quantity,
+                    entry_price=opening_trade.price,
+                    timestamp=date
                 )
             
             # Add detailed logging
@@ -303,6 +332,60 @@ class PortfolioManager:
             ])
         
         return "\n".join(log_parts)
+    
+    def update_position_greeks(self, current_data: pd.DataFrame, date: datetime):
+        """Update Greeks tracking for all open positions"""
+        if not self.track_greeks:
+            return
+        
+        for position_key, position in self.positions.items():
+            if position.is_open:
+                last_trade = position.trades[-1]
+                
+                # Find current option data
+                option_matches = current_data[
+                    (current_data['strike'] == last_trade.strike) &
+                    (current_data['right'] == last_trade.option_type) &
+                    (current_data['expiration'] == last_trade.expiration)
+                ]
+                
+                if not option_matches.empty:
+                    option_data = option_matches.iloc[0]
+                    self.greeks_tracker.update_position_greeks(
+                        position_id=position_key,
+                        current_data=option_data,
+                        quantity=position.net_quantity,
+                        entry_price=position.average_entry_price,
+                        timestamp=date
+                    )
+        
+        # Update portfolio-level Greeks
+        positions_data = []
+        for position_key, position in self.positions.items():
+            if position.is_open:
+                positions_data.append({
+                    'position_id': position_key,
+                    'quantity': position.net_quantity
+                })
+        
+        self.greeks_tracker.update_portfolio_greeks(date, positions_data, current_data)
+    
+    def get_position_greeks_signals(self, position_key: str, thresholds: Dict[str, float]) -> List[Dict[str, Any]]:
+        """Get Greeks-based exit signals for a position"""
+        if not self.track_greeks:
+            return []
+        
+        return self.greeks_tracker.get_exit_signals_from_greeks(position_key, thresholds)
+    
+    def get_greeks_history_df(self, position_key: Optional[str] = None) -> pd.DataFrame:
+        """Get Greeks history as DataFrame"""
+        if not self.track_greeks:
+            return pd.DataFrame()
+        
+        if position_key:
+            return self.greeks_tracker.get_position_greeks_history(position_key)
+        else:
+            return self.greeks_tracker.get_portfolio_greeks_history()
     
     def take_snapshot(self, date: datetime, current_data: pd.DataFrame):
         """Take a snapshot of portfolio state"""

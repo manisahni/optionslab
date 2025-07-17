@@ -1,5 +1,5 @@
 """
-Base classes for options trading strategies
+Base classes for options trading strategies with advanced exit support
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -10,6 +10,20 @@ import pandas as pd
 import numpy as np
 import logging
 from enum import Enum
+import sys
+from pathlib import Path
+
+# Add path for streamlit modules
+sys.path.append(str(Path(__file__).parent.parent / "streamlit-backtester"))
+
+# Import advanced exit modules if available
+try:
+    from modules.advanced_exit_manager import AdvancedExitManager
+    from modules.volatility_stop_calculator import VolatilityStopCalculator
+    ADVANCED_EXIT_SUPPORT = True
+except ImportError:
+    ADVANCED_EXIT_SUPPORT = False
+    logging.warning("Advanced exit modules not available")
 
 
 class PositionType(Enum):
@@ -504,6 +518,58 @@ class SimpleStrategy(StrategyBase):
         self.stop_loss_pct = params.get('stop_loss_pct', 0.50)
         self.profit_target_pct = params.get('profit_target_pct', 1.00)
         self.max_position_size = params.get('max_position_size', 0.05)
+        
+        # Advanced exit support
+        self.use_advanced_exits = params.get('use_advanced_exits', False)
+        self.exit_manager = None
+        self.volatility_calculator = None
+        
+        # Initialize advanced exit modules if enabled and available
+        if self.use_advanced_exits and ADVANCED_EXIT_SUPPORT:
+            self._initialize_advanced_exits(params)
+    
+    def _initialize_advanced_exits(self, params: Dict[str, Any]):
+        """Initialize advanced exit modules with configuration"""
+        # Extract exit configuration from params
+        exit_config = {
+            'enable_dynamic_stops': params.get('enable_dynamic_stops', False),
+            'enable_greeks_exits': params.get('enable_greeks_exits', False),
+            'enable_iv_exits': params.get('enable_iv_exits', False),
+            'enable_time_exits': params.get('enable_time_exits', True),
+            'signal_threshold': params.get('exit_signal_threshold', 0.6),
+            'profit_target_pct': self.profit_target_pct,
+            'stop_loss_pct': self.stop_loss_pct,
+            'max_hold_days': params.get('max_hold_days', None),
+            'dte_exit_threshold': params.get('exit_dte', 5)
+        }
+        
+        # Initialize exit manager
+        self.exit_manager = AdvancedExitManager(exit_config)
+        
+        # Initialize volatility calculator if dynamic stops are enabled
+        if exit_config['enable_dynamic_stops']:
+            vol_config = {
+                'atr_period': params.get('atr_period', 14),
+                'volatility_lookback': params.get('volatility_lookback', 30),
+                'atr_weight': params.get('atr_weight', 0.4),
+                'vega_weight': params.get('vega_weight', 0.35),
+                'theta_weight': params.get('theta_weight', 0.25),
+                'confidence_threshold': params.get('confidence_threshold', 0.7)
+            }
+            self.volatility_calculator = VolatilityStopCalculator(vol_config)
+            self.exit_manager.set_volatility_calculator(self.volatility_calculator)
+        
+        # Configure Greeks exit thresholds
+        if exit_config['enable_greeks_exits']:
+            self.exit_manager.configure_greeks_thresholds(
+                delta_threshold=params.get('delta_exit_threshold', 0.15),
+                iv_rank_threshold=params.get('iv_rank_exit_threshold', 15),
+                theta_acceleration_threshold=params.get('theta_acceleration_threshold', 2.0),
+                gamma_acceleration_threshold=params.get('gamma_acceleration_threshold', 50.0),
+                vega_crush_threshold=params.get('vega_crush_threshold', -25.0)
+            )
+        
+        self.logger.info(f"Advanced exits initialized with config: {exit_config}")
     
     def should_exit_position(self, position: Position, 
                            current_data: pd.DataFrame) -> Tuple[bool, str]:
@@ -519,29 +585,101 @@ class SimpleStrategy(StrategyBase):
         if option_data is None:
             return True, "option_not_found"  # Close if option not found
         
-        # Check if approaching expiration (close if < 5 DTE)
-        if option_data['dte'] <= 5:
-            return True, "expiration"
+        # Use advanced exit manager if available
+        if self.use_advanced_exits and self.exit_manager:
+            # Prepare position data for advanced exit analysis
+            position_data = {
+                'entry_price': position.average_entry_price,
+                'current_price': option_data['mid_price'],
+                'quantity': position.net_quantity,
+                'entry_date': last_trade.date,
+                'current_date': self.current_date,
+                'dte': option_data['dte'],
+                'entry_dte': last_trade.dte,
+                'is_long': position.net_quantity > 0
+            }
+            
+            # Prepare Greeks data
+            greeks_data = {
+                'delta': option_data.get('delta', 0),
+                'gamma': option_data.get('gamma', 0),
+                'theta': option_data.get('theta', 0),
+                'vega': option_data.get('vega', 0),
+                'iv': option_data.get('implied_volatility', 0),
+                'iv_rank': option_data.get('iv_rank', 50),  # Default to 50 if not available
+                'entry_delta': last_trade.delta,
+                'entry_gamma': last_trade.gamma,
+                'entry_theta': last_trade.theta,
+                'entry_vega': last_trade.vega,
+                'entry_iv': last_trade.implied_vol
+            }
+            
+            # Prepare market data for volatility calculations
+            market_data = None
+            if self.volatility_calculator and hasattr(current_data, 'underlying_price'):
+                market_data = {
+                    'close': current_data['underlying_price'].values,
+                    'timestamp': pd.to_datetime(self.current_date)
+                }
+            
+            # Get exit decision from advanced manager
+            exit_decision = self.exit_manager.check_exit_conditions(
+                position_data, greeks_data, market_data
+            )
+            
+            if exit_decision['should_exit']:
+                # Map exit signals to traditional exit reasons
+                primary_signal = exit_decision.get('primary_exit_signal', {})
+                signal_type = primary_signal.get('type', 'unknown')
+                
+                # Map signal types to exit reasons
+                reason_mapping = {
+                    'stop_loss': 'stop_loss',
+                    'profit_target': 'profit_target',
+                    'dynamic_stop': 'dynamic_stop',
+                    'delta_threshold': 'greeks_exit',
+                    'iv_rank_drop': 'iv_exit',
+                    'theta_acceleration': 'theta_decay',
+                    'vega_crush': 'vega_exit',
+                    'time_exit': 'time_decay',
+                    'dte_threshold': 'expiration'
+                }
+                
+                exit_reason = reason_mapping.get(signal_type, signal_type)
+                return True, exit_reason
+            
+            # If advanced exits say don't exit, continue with traditional checks
+            # for safety (expiration check)
+            if option_data['dte'] <= 5:
+                return True, "expiration"
+            
+            return False, "none"
         
-        # Calculate current P&L
-        current_price = option_data['mid_price']
-        entry_price = position.average_entry_price
-        
-        if position.net_quantity > 0:  # Long position
-            pnl_pct = (current_price - entry_price) / entry_price
-        else:  # Short position
-            pnl_pct = (entry_price - current_price) / entry_price
-        
-        # Check stop loss
-        if pnl_pct <= -self.stop_loss_pct:
-            return True, "stop_loss"
-        
-        # Check profit target
-        if pnl_pct >= self.profit_target_pct:
-            return True, "profit_target"
-        
-        # Check time decay (close if DTE < 10)
-        if option_data['dte'] <= 10:
-            return True, "time_decay"
-        
-        return False, "none"
+        else:
+            # Traditional exit logic
+            # Check if approaching expiration (close if < 5 DTE)
+            if option_data['dte'] <= 5:
+                return True, "expiration"
+            
+            # Calculate current P&L
+            current_price = option_data['mid_price']
+            entry_price = position.average_entry_price
+            
+            if position.net_quantity > 0:  # Long position
+                pnl_pct = (current_price - entry_price) / entry_price
+            else:  # Short position
+                pnl_pct = (entry_price - current_price) / entry_price
+            
+            # Check stop loss
+            if pnl_pct <= -self.stop_loss_pct:
+                return True, "stop_loss"
+            
+            # Check profit target
+            if pnl_pct >= self.profit_target_pct:
+                return True, "profit_target"
+            
+            # Check time decay (close if DTE < 10)
+            if option_data['dte'] <= 10:
+                return True, "time_decay"
+            
+            return False, "none"
