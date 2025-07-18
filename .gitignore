@@ -150,3 +150,11 @@ streamlit-backtester/tmp_trade_logs/*
 *.parquet
 *.h5
 *.hdf5
+
+# Archive
+archive/
+
+# New results
+results/
+backtest_*.png
+backtest_*.json

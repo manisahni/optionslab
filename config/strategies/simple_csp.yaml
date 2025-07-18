@@ -1,0 +1,38 @@
+# Simple Cash-Secured Put Strategy
+# Sell puts to generate income or acquire stock
+
+name: "Simple Cash-Secured Put"
+description: "Sell puts for premium income"
+category: "income"
+
+# Strategy Configuration
+legs:
+  - type: put
+    direction: short       # Sell puts
+    quantity: 1
+    delta_target: -0.30    # 30-delta puts
+
+# Entry Rules
+entry_rules:
+  dte: 45                  # Days to expiration
+  delta_target: -0.30      # Target delta
+  
+  # Basic filters
+  volume_min: 50           # Minimum volume
+  open_interest_min: 200   # Minimum open interest
+
+# Exit Rules  
+exit_rules:
+  profit_target_pct: 0.50  # Take 50% of credit
+  stop_loss_pct: 2.00      # Stop at 200% loss
+  exit_on_dte: 21          # Exit with 21 days left
+
+# Risk Management
+risk_management:
+  max_positions: 3         # Max 3 concurrent positions
+  position_sizing: "fixed" # Fixed position size
+  max_position_size: 0.20  # 20% of capital per trade
+
+# Execution
+execution:
+  price_type: "market"     # Use market prices
