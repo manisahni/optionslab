@@ -15,8 +15,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import json
+import os
 
 from backtest_engine import run_backtest, plot_results
+
+# Feature flags
+FEATURE_FLAGS = {
+    "ai_analysis": os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true",
+    "advanced_plots": os.getenv("ENABLE_ADVANCED_PLOTS", "true").lower() == "true",
+    "real_time_data": os.getenv("ENABLE_REAL_TIME_DATA", "false").lower() == "true",
+    "multi_strategy": os.getenv("ENABLE_MULTI_STRATEGY", "true").lower() == "true"
+}
 
 # Custom JSON encoder to handle numpy types and pandas timestamps
 class NumpyEncoder(json.JSONEncoder):
@@ -65,6 +74,15 @@ class BacktestResponse(BaseModel):
 async def root():
     """Health check endpoint"""
     return {"status": "running", "message": "Options Backtester API"}
+
+@app.get("/flags")
+async def get_feature_flags():
+    """Get current feature flag status"""
+    return {
+        "feature_flags": FEATURE_FLAGS,
+        "version": "1.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development")
+    }
 
 @app.post("/run_backtest", response_model=BacktestResponse)
 async def run_backtest_endpoint(request: BacktestRequest):
@@ -119,12 +137,19 @@ async def run_backtest_endpoint(request: BacktestRequest):
 @app.get("/strategies")
 async def get_strategies():
     """Get available strategies"""
-    return {
-        "strategies": [
-            {"value": "long_call", "label": "Long Call"},
-            {"value": "long_put", "label": "Long Put"}
-        ]
-    }
+    strategies = [
+        {"value": "long_call", "label": "Long Call"},
+        {"value": "long_put", "label": "Long Put"}
+    ]
+    
+    # Add multi-strategy support if enabled
+    if FEATURE_FLAGS["multi_strategy"]:
+        strategies.extend([
+            {"value": "covered_call", "label": "Covered Call"},
+            {"value": "cash_secured_put", "label": "Cash Secured Put"}
+        ])
+    
+    return {"strategies": strategies}
 
 if __name__ == "__main__":
     import uvicorn
