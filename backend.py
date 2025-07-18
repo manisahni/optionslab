@@ -19,33 +19,7 @@ import os
 
 from backtest_engine import run_backtest, plot_results
 
-# Feature flags
-FEATURE_FLAGS = {
-    "ai_analysis": os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true",
-    "advanced_plots": os.getenv("ENABLE_ADVANCED_PLOTS", "true").lower() == "true",
-    "real_time_data": os.getenv("ENABLE_REAL_TIME_DATA", "false").lower() == "true",
-    "multi_strategy": os.getenv("ENABLE_MULTI_STRATEGY", "true").lower() == "true"
-}
-
-# Custom JSON encoder to handle numpy types and pandas timestamps
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, (np.integer, np.int_)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float_)):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        elif isinstance(obj, pd.Series):
-            return obj.tolist()
-        elif hasattr(obj, 'isoformat'):  # Handle datetime/timestamp objects
-            return obj.isoformat()
-        return super(NumpyEncoder, self).default(obj)
-
-# Create FastAPI app
-app = FastAPI(title="Options Backtester API", version="1.0.0")
+app = FastAPI(title="OptionsLab API", version="1.0.0")
 
 # Add CORS middleware
 app.add_middleware(
@@ -56,100 +30,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request model
 class BacktestRequest(BaseModel):
     strategy: str
-    start_date: date
-    end_date: date
-    initial_capital: float = 100000
-
-# Response model
-class BacktestResponse(BaseModel):
-    success: bool
-    results: dict
-    plot_base64: str = ""
-    error: str = ""
+    start_date: str
+    end_date: str
+    initial_capital: float = 10000.0
 
 @app.get("/")
 async def root():
+    """Root endpoint"""
+    return {"message": "OptionsLab API is running", "version": "1.0.0"}
+
+@app.get("/health")
+async def health_check():
     """Health check endpoint"""
-    return {"status": "running", "message": "Options Backtester API"}
-
-@app.get("/flags")
-async def get_feature_flags():
-    """Get current feature flag status"""
-    return {
-        "feature_flags": FEATURE_FLAGS,
-        "version": "1.0.0",
-        "environment": os.getenv("ENVIRONMENT", "development")
-    }
-
-@app.post("/run_backtest", response_model=BacktestResponse)
-async def run_backtest_endpoint(request: BacktestRequest):
-    """Run a backtest and return results"""
-    try:
-        # Convert dates to strings
-        start_str = request.start_date.strftime("%Y-%m-%d")
-        end_str = request.end_date.strftime("%Y-%m-%d")
-        
-        # Run backtest
-        results = run_backtest(
-            strategy_type=request.strategy,
-            start_date=start_str,
-            end_date=end_str,
-            initial_capital=int(request.initial_capital)
-        )
-        
-        if not results:
-            return BacktestResponse(
-                success=False,
-                results={},
-                error="No data found for the specified period"
-            )
-        
-        # Generate plot and convert to base64
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-            plot_results(results, save_path=tmp.name)
-            tmp.flush()
-            with open(tmp.name, 'rb') as f:
-                plot_base64 = base64.b64encode(f.read()).decode('utf-8')
-            import os
-            os.unlink(tmp.name)  # Clean up temp file
-        plt.close('all')  # Clean up
-        
-        # Convert results to JSON-serializable format
-        results_json = json.loads(json.dumps(results, cls=NumpyEncoder))
-        
-        return BacktestResponse(
-            success=True,
-            results=results_json,
-            plot_base64=plot_base64
-        )
-        
-    except Exception as e:
-        return BacktestResponse(
-            success=False,
-            results={},
-            error=str(e)
-        )
+    return {"status": "healthy", "service": "OptionsLab API"}
 
 @app.get("/strategies")
 async def get_strategies():
     """Get available strategies"""
     strategies = [
-        {"value": "long_call", "label": "Long Call"},
-        {"value": "long_put", "label": "Long Put"}
+        {"name": "Long Call", "description": "Buy call options"},
+        {"name": "Long Put", "description": "Buy put options"}
     ]
-    
-    # Add multi-strategy support if enabled
-    if FEATURE_FLAGS["multi_strategy"]:
-        strategies.extend([
-            {"value": "covered_call", "label": "Covered Call"},
-            {"value": "cash_secured_put", "label": "Cash Secured Put"}
-        ])
-    
     return {"strategies": strategies}
+
+@app.post("/backtest")
+async def run_backtest_api(request: BacktestRequest):
+    """Run a backtest"""
+    try:
+        # Run the backtest
+        results = run_backtest(
+            strategy=request.strategy,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            initial_capital=request.initial_capital
+        )
+        
+        # Create plots
+        plot_data = plot_results(results)
+        
+        return {
+            "success": True,
+            "results": results,
+            "plots": plot_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

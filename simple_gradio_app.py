@@ -25,28 +25,19 @@ def check_api_status():
     except:
         return False
 
-def get_feature_flags():
-    """Get feature flags from the API"""
-    try:
-        response = requests.get(f"{API_URL}/flags", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except:
-        return None
-
 def get_strategies():
-    """Get available strategies from the API"""
+    """Get available strategies from API"""
     try:
         response = requests.get(f"{API_URL}/strategies", timeout=5)
         if response.status_code == 200:
-            return response.json()["strategies"]
-        return []
+            data = response.json()
+            return [strategy["name"] for strategy in data["strategies"]]
+        return ["Long Call", "Long Put"]  # Fallback
     except:
-        return []
+        return ["Long Call", "Long Put"]  # Fallback
 
 def run_backtest(strategy, start_date, end_date, initial_capital):
-    """Run a backtest and return results"""
+    """Run backtest via API"""
     try:
         # Prepare request data
         data = {
@@ -57,163 +48,150 @@ def run_backtest(strategy, start_date, end_date, initial_capital):
         }
         
         # Make API request
-        response = requests.post(f"{API_URL}/run_backtest", json=data, timeout=30)
+        response = requests.post(f"{API_URL}/backtest", json=data, timeout=30)
         
         if response.status_code == 200:
             result = response.json()
-            if result["success"]:
-                return format_results(result["results"], result["plot_base64"])
+            if result.get("success"):
+                return format_results(result["results"], result.get("plots", {}))
             else:
-                return f"❌ Backtest failed: {result['error']}"
+                return f"❌ Backtest failed: {result.get('error', 'Unknown error')}"
         else:
-            return f"❌ API Error: {response.status_code}"
+            return f"❌ API Error: {response.status_code} - {response.text}"
             
+    except requests.exceptions.RequestException as e:
+        return f"❌ Connection Error: {str(e)}"
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-def format_results(results, plot_base64):
+def format_results(results, plots):
     """Format backtest results for display"""
     try:
-        # Decode plot
-        plot_data = base64.b64decode(plot_base64)
-        plot_image = Image.open(io.BytesIO(plot_data))
+        # Extract key metrics
+        total_return = results.get("total_return", 0)
+        sharpe_ratio = results.get("sharpe_ratio", 0)
+        max_drawdown = results.get("max_drawdown", 0)
+        win_rate = results.get("win_rate", 0)
+        num_trades = results.get("num_trades", 0)
         
-        # Format metrics
-        metrics = results.get("metrics", {})
-        metrics_text = f"""
+        # Format the results
+        formatted = f"""
 ## 📊 Backtest Results
 
-### Performance Metrics:
-- **Total Return**: {metrics.get('total_return', 'N/A'):.2%}
-- **Annualized Return**: {metrics.get('annualized_return', 'N/A'):.2%}
-- **Sharpe Ratio**: {metrics.get('sharpe_ratio', 'N/A'):.2f}
-- **Max Drawdown**: {metrics.get('max_drawdown', 'N/A'):.2%}
-- **Win Rate**: {metrics.get('win_rate', 'N/A'):.2%}
+### 📈 Performance Metrics
+- **Total Return**: {total_return:.2%}
+- **Sharpe Ratio**: {sharpe_ratio:.2f}
+- **Max Drawdown**: {max_drawdown:.2%}
+- **Win Rate**: {win_rate:.2%}
+- **Number of Trades**: {num_trades}
 
-### Trade Summary:
-- **Total Trades**: {metrics.get('total_trades', 'N/A')}
-- **Winning Trades**: {metrics.get('winning_trades', 'N/A')}
-- **Losing Trades**: {metrics.get('losing_trades', 'N/A')}
-- **Average Win**: {metrics.get('avg_win', 'N/A'):.2%}
-- **Average Loss**: {metrics.get('avg_loss', 'N/A'):.2%}
-
-### Portfolio:
-- **Final Value**: ${metrics.get('final_value', 'N/A'):,.2f}
-- **Initial Capital**: ${metrics.get('initial_capital', 'N/A'):,.2f}
-- **Net Profit**: ${metrics.get('net_profit', 'N/A'):,.2f}
-        """
+### 📋 Trade Log
+"""
         
-        return metrics_text, plot_image
+        # Add trade log if available
+        if "trade_log" in results:
+            trades = results["trade_log"]
+            if isinstance(trades, list) and len(trades) > 0:
+                formatted += "\n| Date | Action | Price | Quantity | P&L |\n"
+                formatted += "|------|--------|-------|----------|-----|\n"
+                
+                for trade in trades[:10]:  # Show first 10 trades
+                    date = trade.get("date", "N/A")
+                    action = trade.get("action", "N/A")
+                    price = trade.get("price", 0)
+                    quantity = trade.get("quantity", 0)
+                    pnl = trade.get("pnl", 0)
+                    
+                    formatted += f"| {date} | {action} | ${price:.2f} | {quantity} | ${pnl:.2f} |\n"
+                
+                if len(trades) > 10:
+                    formatted += f"\n*... and {len(trades) - 10} more trades*"
+            else:
+                formatted += "\nNo trades executed during this period."
+        
+        # Add plots if available
+        if plots:
+            formatted += "\n\n### 📊 Charts\n"
+            for plot_name, plot_data in plots.items():
+                if plot_data:
+                    formatted += f"\n**{plot_name}**\n"
+                    formatted += f"![{plot_name}](data:image/png;base64,{plot_data})\n"
+        
+        return formatted
         
     except Exception as e:
-        return f"❌ Error formatting results: {str(e)}", None
+        return f"❌ Error formatting results: {str(e)}"
 
 def create_interface():
     """Create the Gradio interface"""
     
     # Check API status
     api_running = check_api_status()
-    if not api_running:
-        return gr.Interface(
-            fn=lambda: "❌ API server is not running. Please start it with: python backend.py",
-            inputs=[],
-            outputs=gr.Textbox(label="Status"),
-            title="🚀 OptionsLab Backtester",
-            description="Options backtesting system with AI analysis"
-        )
+    strategies = get_strategies() if api_running else ["Long Call", "Long Put"]
     
-    # Get feature flags
-    flags_data = get_feature_flags()
-    flags_text = ""
-    if flags_data:
-        flags = flags_data.get("feature_flags", {})
-        flags_text = f"""
-## 🚩 Feature Flags Status
-
-- **AI Analysis**: {'✅ Enabled' if flags.get('ai_analysis') else '❌ Disabled'}
-- **Advanced Plots**: {'✅ Enabled' if flags.get('advanced_plots') else '❌ Disabled'}
-- **Real-time Data**: {'✅ Enabled' if flags.get('real_time_data') else '❌ Disabled'}
-- **Multi-Strategy**: {'✅ Enabled' if flags.get('multi_strategy') else '❌ Disabled'}
-
-**Version**: {flags_data.get('version', 'N/A')} | **Environment**: {flags_data.get('environment', 'N/A')}
-        """
-    
-    # Get strategies
-    strategies = get_strategies()
-    strategy_choices = [s["label"] for s in strategies]
-    strategy_values = [s["value"] for s in strategies]
-    
-    # Default dates
-    end_date = datetime.now().strftime("%Y-%m-%d")
-    start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-    
-    with gr.Blocks(title="🚀 OptionsLab Backtester", theme=gr.themes.Soft()) as app:
-        gr.Markdown("# 🚀 OptionsLab Backtester")
-        gr.Markdown("Simple options backtesting system with AI analysis")
+    with gr.Blocks(title="OptionsLab - Simple Backtester", theme=gr.themes.Soft()) as app:
+        gr.Markdown("# 🚀 OptionsLab - Simple Options Backtester")
         
-        # Feature flags section
-        if flags_text:
-            gr.Markdown(flags_text)
+        # Status indicator
+        status_color = "🟢" if api_running else "🔴"
+        status_text = "API Connected" if api_running else "API Not Connected"
+        gr.Markdown(f"**Status**: {status_color} {status_text}")
         
-        gr.Markdown("---")
+        if not api_running:
+            gr.Markdown("⚠️ **Please start the API server first**: `python backend.py`")
         
         with gr.Row():
             with gr.Column(scale=1):
-                gr.Markdown("### 📋 Configuration")
+                gr.Markdown("### ⚙️ Configuration")
                 
                 strategy = gr.Dropdown(
-                    choices=strategy_choices,
-                    value=strategy_choices[0] if strategy_choices else None,
+                    choices=strategies,
+                    value=strategies[0] if strategies else "Long Call",
                     label="Strategy",
                     info="Select the options strategy to backtest"
                 )
                 
-                start_date_input = gr.Textbox(
-                    value=start_date,
+                start_date = gr.Textbox(
+                    value=(datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
                     label="Start Date",
-                    info="Format: YYYY-MM-DD"
+                    info="Start date for backtest (YYYY-MM-DD)"
                 )
                 
-                end_date_input = gr.Textbox(
-                    value=end_date, 
+                end_date = gr.Textbox(
+                    value=datetime.now().strftime("%Y-%m-%d"),
                     label="End Date", 
-                    info="Format: YYYY-MM-DD"
+                    info="End date for backtest (YYYY-MM-DD)"
                 )
                 
                 initial_capital = gr.Number(
-                    value=100000,
+                    value=10000.0,
                     label="Initial Capital ($)",
-                    info="Starting portfolio value"
+                    info="Starting capital for the backtest"
                 )
                 
-                run_button = gr.Button("🚀 Run Backtest", variant="primary")
-                
+                run_btn = gr.Button("🚀 Run Backtest", variant="primary")
+            
             with gr.Column(scale=2):
                 gr.Markdown("### 📊 Results")
-                
-                results_text = gr.Markdown("Ready to run backtest...")
-                results_plot = gr.Image(label="Portfolio Performance")
+                results_output = gr.Markdown("Ready to run backtest...")
         
-        # Event handler
-        def run_backtest_wrapper(strategy_label, start, end, capital):
-            # Find strategy value from label
-            try:
-                strategy_idx = strategy_choices.index(strategy_label)
-                strategy_value = strategy_values[strategy_idx]
-            except:
-                return "❌ Invalid strategy selected", None
-            
-            return run_backtest(strategy_value, start, end, capital)
-        
-        run_button.click(
-            fn=run_backtest_wrapper,
-            inputs=[strategy, start_date_input, end_date_input, initial_capital],
-            outputs=[results_text, results_plot]
+        # Event handlers
+        run_btn.click(
+            fn=run_backtest,
+            inputs=[strategy, start_date, end_date, initial_capital],
+            outputs=results_output
         )
         
-        # Status footer
-        gr.Markdown("---")
-        gr.Markdown(f"**API Status**: {'✅ Running' if api_running else '❌ Not Available'} | **API URL**: {API_URL}")
+        # Auto-refresh strategies when API comes online
+        def refresh_strategies():
+            api_running = check_api_status()
+            if api_running:
+                return gr.Dropdown(choices=get_strategies())
+            return gr.Dropdown(choices=["Long Call", "Long Put"])
+        
+        # Refresh button
+        refresh_btn = gr.Button("🔄 Refresh", size="sm")
+        refresh_btn.click(fn=refresh_strategies, outputs=strategy)
     
     return app
 
