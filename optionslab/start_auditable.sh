@@ -3,6 +3,21 @@
 echo "🚀 Starting OptionsLab Auditable Backtesting System..."
 echo "=================================================="
 
+# First, verify ThetaData client integrity
+echo "🔍 Verifying ThetaData client..."
+cd ..
+python verify_thetadata_client.py
+if [ $? -ne 0 ]; then
+    echo "❌ ThetaData client verification failed!"
+    echo "   The system cannot start without the ThetaData client."
+    echo "   Please restore the missing files from backup or git."
+    exit 1
+fi
+cd optionslab
+
+echo "✅ ThetaData client verified!"
+echo ""
+
 # Check if we're in the right directory
 if [ ! -f "auditable_gradio_app.py" ]; then
     echo "❌ Error: auditable_gradio_app.py not found!"

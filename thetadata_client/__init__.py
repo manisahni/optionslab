@@ -21,31 +21,53 @@ Quick Start:
     >>>         quote = await client.get_option_quote_snapshot("AAPL", "20250117", 200.0, "C")
 """
 
-from .client import ThetaDataTerminalClient, ThetaDataClient
-from .rest import ThetaDataRESTClient, RESTClient
-from .stream import StreamClient
-from .models import (
-    Contract,
-    Quote, 
-    Trade,
-    OHLC,
-    Greeks,
-    StreamMessage,
-    PaginatedResponse,
-    SubscriptionRequest,
-    ErrorResponse,
-    OptionRight,
-    SecurityType,
-    StreamMessageType,
-)from .exceptions import (
-    ThetaDataError,
-    AuthenticationError,
-    RateLimitError,
-    ConnectionError,
-    ResponseError,
-    ValidationError,
-    StreamError,
-)
+# Note: These imports are for the complete client implementation
+# Currently only utils and discovery modules are implemented
+try:
+    from .client import ThetaDataTerminalClient, ThetaDataClient
+except ImportError:
+    pass
+
+try:
+    from .rest import ThetaDataRESTClient, RESTClient
+except ImportError:
+    pass
+
+try:
+    from .stream import StreamClient
+except ImportError:
+    pass
+
+try:
+    from .models import (
+        Contract,
+        Quote, 
+        Trade,
+        OHLC,
+        Greeks,
+        StreamMessage,
+        PaginatedResponse,
+        SubscriptionRequest,
+        ErrorResponse,
+        OptionRight,
+        SecurityType,
+        StreamMessageType,
+    )
+except ImportError:
+    pass
+
+try:
+    from .exceptions import (
+        ThetaDataError,
+        AuthenticationError,
+        RateLimitError,
+        ConnectionError,
+        ResponseError,
+        ValidationError,
+        StreamError,
+    )
+except ImportError:
+    pass
 
 # Version info
 __version__ = "0.1.0"
