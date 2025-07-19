@@ -121,7 +121,7 @@ def get_available_strategies():
     
     return strategies
 
-def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date, initial_capital):
+def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date, initial_capital, log_level="summary"):
     """Run auditable backtest and return results for Gradio"""
     
     # Capture the audit output
@@ -159,9 +159,28 @@ def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date
             for i, trade in enumerate(results['trades'], 1):
                 if 'exit_date' in trade:
                     pnl_color = "🟢" if trade['pnl'] > 0 else "🔴"
-                    summary += f"{pnl_color} **Trade {i}:** Entry ${trade['option_price']:.2f} → Exit ${trade['exit_date']:.2f} → P&L ${trade['pnl']:.2f}\n"
+                    exit_reason = trade.get('exit_reason', 'unknown')
+                    summary += f"{pnl_color} **Trade {i}:** Entry ${trade['option_price']:.2f} → Exit ${trade['exit_price']:.2f} → P&L ${trade['pnl']:.2f} ({exit_reason})\n"
             
-            return f"{summary}\n\n## 🔍 Full Audit Log\n```\n{audit_log}\n```"
+            # Format based on log level
+            if log_level == "summary":
+                # Just show the summary, no audit log
+                return summary
+            elif log_level == "standard":
+                # Show key events only
+                key_events = []
+                for line in audit_log.split('\n'):
+                    if any(keyword in line for keyword in ['✅ AUDIT: Executing trade', '🔍 AUDIT: Exiting position', 
+                                                           '💰 AUDIT: Initial Capital', '📊 AUDIT: Final Results',
+                                                           '✅ AUDIT: Strategy:', '🎯 AUDIT: Profit target hit',
+                                                           '🛑 AUDIT: Stop loss hit']):
+                        key_events.append(line)
+                
+                filtered_log = '\n'.join(key_events)
+                return f"{summary}\n\n## 🔍 Key Events\n```\n{filtered_log}\n```"
+            else:
+                # Detailed - show everything
+                return f"{summary}\n\n## 🔍 Full Audit Log\n```\n{audit_log}\n```"
         else:
             sys.stdout = old_stdout
             return f"❌ Backtest failed!\n\n## 🔍 Error Log\n```\n{audit_output.getvalue()}\n```"
@@ -231,6 +250,18 @@ def create_auditable_interface():
                     info="Starting capital in dollars"
                 )
                 
+                # Log level control
+                log_level = gr.Dropdown(
+                    label="📝 Log Detail Level",
+                    choices=[
+                        ("Summary - Just results and trades", "summary"),
+                        ("Standard - Key events only", "standard"),
+                        ("Detailed - Full audit log", "detailed")
+                    ],
+                    value="summary",
+                    info="Control how much detail to show in the output"
+                )
+                
                 # Run button
                 run_btn = gr.Button("🚀 Run Auditable Backtest", variant="primary", size="lg")
                 
@@ -255,7 +286,7 @@ def create_auditable_interface():
                 )
         
         # Event handlers
-        def on_run_backtest(data_file, strategy_file, start_date, end_date, initial_capital):
+        def on_run_backtest(data_file, strategy_file, start_date, end_date, initial_capital, log_level):
             if not data_file or not strategy_file:
                 return "❌ Please select both a data file and strategy file."
             
@@ -263,7 +294,7 @@ def create_auditable_interface():
             status_text = "🔄 Running auditable backtest..."
             
             # Run the backtest
-            results = run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date, initial_capital)
+            results = run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date, initial_capital, log_level)
             
             return results
         
@@ -281,7 +312,7 @@ def create_auditable_interface():
         
         run_btn.click(
             fn=on_run_backtest,
-            inputs=[data_file_dropdown, strategy_dropdown, start_date, end_date, initial_capital],
+            inputs=[data_file_dropdown, strategy_dropdown, start_date, end_date, initial_capital, log_level],
             outputs=[results_output]
         )
         

@@ -3,8 +3,17 @@
 
 name: "Long Put with Dynamic Stops"
 description: "Bearish strategy using long puts with volatility-based dynamic stops and Greeks exit triggers"
+strategy_type: "long_put"
 category: "directional"
 version: "1.0"
+
+# Strategy Parameters
+parameters:
+  initial_capital: 10000   # Starting capital
+  position_size: 0.05      # 5% of capital per trade
+  max_positions: 2         # Max concurrent positions
+  max_hold_days: 30        # Max days to hold position
+  entry_frequency: 3       # Days between entries
 
 # Strategy Legs
 legs:
@@ -31,10 +40,14 @@ entry_rules:
 
 # Traditional Exit Rules
 exit_rules:
-  profit_target_pct: 0.75
-  stop_loss_pct: 0.40
-  exit_on_dte: 5
-  max_hold_days: 30
+  - condition: "profit_target"
+    target_percent: 75      # Exit at 75% profit
+    
+  - condition: "stop_loss"
+    stop_percent: -40       # Exit at 40% loss
+    
+  - condition: "time_stop"
+    max_days: 30           # Exit after 30 days
 
 # Dynamic Volatility Stops
 dynamic_stops:
