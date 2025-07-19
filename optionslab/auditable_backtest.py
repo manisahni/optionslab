@@ -653,21 +653,34 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                         print(f"   Vega: {selected_option.get('vega', 'N/A'):.3f}" if selected_option.get('vega') else "   Vega: N/A")
                         print(f"   IV: {selected_option.get('implied_vol', 'N/A'):.3f}" if selected_option.get('implied_vol') else "   IV: N/A")
                     
-                    # Record the trade
+                    # Record the trade with comprehensive data
                     trade = {
+                        'trade_id': len(trades) + 1,
                         'entry_date': current_date,
+                        'option_type': selected_option['right'],  # 'C' or 'P'
                         'strike': selected_option['strike_dollars'],
+                        'expiration': selected_option['expiration'],
+                        'dte_at_entry': (pd.to_datetime(selected_option['expiration']) - pd.to_datetime(current_date)).days,
                         'option_price': selected_option['close'],
+                        'entry_bid': selected_option.get('bid', None),
+                        'entry_ask': selected_option.get('ask', None),
+                        'entry_spread': selected_option.get('ask', 0) - selected_option.get('bid', 0),
+                        'entry_spread_pct': ((selected_option.get('ask', 0) - selected_option.get('bid', 0)) / selected_option['close'] * 100) if selected_option['close'] > 0 else None,
                         'contracts': contracts,
                         'cost': cost,
                         'cash_before': cash,
                         'cash_after': cash - cost,
+                        'underlying_at_entry': current_price,
+                        'entry_reason': 'target_selection',  # Will enhance this based on strategy
                         # Store entry Greeks in trade record
                         'entry_delta': selected_option.get('delta', None),
                         'entry_gamma': selected_option.get('gamma', None),
                         'entry_theta': selected_option.get('theta', None),
                         'entry_vega': selected_option.get('vega', None),
-                        'entry_iv': selected_option.get('implied_vol', None)
+                        'entry_rho': selected_option.get('rho', None),
+                        'entry_iv': selected_option.get('implied_vol', None),
+                        'entry_volume': selected_option.get('volume', None),
+                        'entry_open_interest': selected_option.get('open_interest', None)
                     }
                     trades.append(trade)
                     
@@ -916,21 +929,51 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                     cash += proceeds
                     print(f"💳 AUDIT: Cash after exit: ${cash:.2f}")
                     
-                    # Update trade log
+                    # Update trade log with comprehensive exit data
                     for trade in trades:
                         if (trade['entry_date'] == pos['entry_date'] and 
+                            trade['strike'] == pos['strike'] and
                             'exit_date' not in trade):
                             trade['exit_date'] = current_date
                             trade['exit_price'] = exit_price
+                            trade['exit_bid'] = exit_option.get('bid', None)
+                            trade['exit_ask'] = exit_option.get('ask', None)
+                            trade['exit_spread'] = exit_option.get('ask', 0) - exit_option.get('bid', 0)
+                            trade['exit_spread_pct'] = ((exit_option.get('ask', 0) - exit_option.get('bid', 0)) / exit_price * 100) if exit_price > 0 else None
                             trade['proceeds'] = proceeds
                             trade['pnl'] = current_pnl
+                            trade['pnl_pct'] = (current_pnl / trade['cost']) * 100
                             trade['exit_reason'] = exit_reason
+                            trade['days_held'] = pos['days_held']
+                            trade['underlying_at_exit'] = current_price
+                            trade['underlying_move'] = current_price - trade['underlying_at_entry']
+                            trade['underlying_move_pct'] = ((current_price - trade['underlying_at_entry']) / trade['underlying_at_entry']) * 100
+                            # Store exit Greeks
+                            trade['exit_delta'] = exit_option.get('delta', None)
+                            trade['exit_gamma'] = exit_option.get('gamma', None)
+                            trade['exit_theta'] = exit_option.get('theta', None)
+                            trade['exit_vega'] = exit_option.get('vega', None)
+                            trade['exit_rho'] = exit_option.get('rho', None)
+                            trade['exit_iv'] = exit_option.get('implied_vol', None)
+                            trade['exit_volume'] = exit_option.get('volume', None)
+                            trade['exit_open_interest'] = exit_option.get('open_interest', None)
+                            # Calculate annualized return
+                            if trade['days_held'] > 0:
+                                trade['annualized_return'] = (trade['pnl_pct'] / trade['days_held']) * 365
+                            else:
+                                trade['annualized_return'] = 0
                             # Store exit Greeks
                             trade['exit_delta'] = pos['current_delta']
                             trade['exit_gamma'] = pos['current_gamma']
                             trade['exit_theta'] = pos['current_theta']
                             trade['exit_vega'] = pos['current_vega']
+                            trade['exit_rho'] = pos.get('current_rho', None)
                             trade['exit_iv'] = pos['current_iv']
+                            # Calculate annualized return
+                            if pos['days_held'] > 0:
+                                trade['annualized_return'] = (trade['pnl_pct'] / pos['days_held']) * 365
+                            else:
+                                trade['annualized_return'] = trade['pnl_pct'] * 365  # Same day exit
                             # Store Greeks history
                             trade['greeks_history'] = pos['greeks_history']
                             break
@@ -982,13 +1025,39 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                 
                 print(f"💰 AUDIT: Final exit - Strike: ${pos['strike']:.2f}, P&L: ${pnl:.2f}")
                 
-                # Update trade log
+                # Update trade log for final positions
                 for trade in trades:
-                    if 'exit_date' not in trade:
+                    if (trade['entry_date'] == pos['entry_date'] and 
+                        trade['strike'] == pos['strike'] and
+                        'exit_date' not in trade):
                         trade['exit_date'] = unique_dates[-1]
                         trade['exit_price'] = exit_price
+                        trade['exit_bid'] = exit_option.get('bid', None)
+                        trade['exit_ask'] = exit_option.get('ask', None)
+                        trade['exit_spread'] = exit_option.get('ask', 0) - exit_option.get('bid', 0)
+                        trade['exit_spread_pct'] = ((exit_option.get('ask', 0) - exit_option.get('bid', 0)) / exit_price * 100) if exit_price > 0 else None
                         trade['proceeds'] = proceeds
                         trade['pnl'] = pnl
+                        trade['pnl_pct'] = (pnl / trade['cost']) * 100
+                        trade['exit_reason'] = 'end_of_period'
+                        trade['days_held'] = pos['days_held']
+                        trade['underlying_at_exit'] = current_underlying_price
+                        trade['underlying_move'] = current_underlying_price - trade['underlying_at_entry']
+                        trade['underlying_move_pct'] = ((current_underlying_price - trade['underlying_at_entry']) / trade['underlying_at_entry']) * 100
+                        # Exit Greeks
+                        trade['exit_delta'] = pos.get('current_delta', None)
+                        trade['exit_gamma'] = pos.get('current_gamma', None)
+                        trade['exit_theta'] = pos.get('current_theta', None)
+                        trade['exit_vega'] = pos.get('current_vega', None)
+                        trade['exit_rho'] = pos.get('current_rho', None)
+                        trade['exit_iv'] = pos.get('current_iv', None)
+                        trade['exit_volume'] = exit_option.get('volume', None)
+                        trade['exit_open_interest'] = exit_option.get('open_interest', None)
+                        # Annualized return
+                        if pos['days_held'] > 0:
+                            trade['annualized_return'] = (trade['pnl_pct'] / pos['days_held']) * 365
+                        else:
+                            trade['annualized_return'] = trade['pnl_pct'] * 365
                         break
     
     # Calculate final results
