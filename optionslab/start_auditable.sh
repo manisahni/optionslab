@@ -3,19 +3,25 @@
 echo "🚀 Starting OptionsLab Auditable Backtesting System..."
 echo "=================================================="
 
-# First, verify ThetaData client integrity
-echo "🔍 Verifying ThetaData client..."
+# Check ThetaData client integrity (warning only)
+echo "🔍 Checking ThetaData client..."
 cd ..
 python verify_thetadata_client.py
 if [ $? -ne 0 ]; then
-    echo "❌ ThetaData client verification failed!"
-    echo "   The system cannot start without the ThetaData client."
-    echo "   Please restore the missing files from backup or git."
-    exit 1
+    echo "⚠️  WARNING: ThetaData client verification failed!"
+    echo "   Some features may not work properly:"
+    echo "   - Cannot download new data from ThetaData"
+    echo "   - Cannot use ThetaData API functions"
+    echo ""
+    echo "   The system will continue with existing data files only."
+    echo "   To restore full functionality, check git history or backups."
+    echo ""
+    read -p "   Press Enter to continue anyway..." -n 1 -r
+    echo ""
+else
+    echo "✅ ThetaData client verified!"
 fi
 cd optionslab
-
-echo "✅ ThetaData client verified!"
 echo ""
 
 # Check if we're in the right directory
