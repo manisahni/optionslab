@@ -32,33 +32,66 @@ def get_available_data_files():
     
     files = []
     
-    # Add multi-day option first
-    if repaired_dir.exists() and any(repaired_dir.glob("spy_options_eod_*.parquet")):
-        files.append(("📅 Multi-Day Backtest (Repaired Directory)", str(repaired_dir)))
-    elif main_dir.exists() and any(main_dir.glob("spy_options_eod_*.parquet")):
-        files.append(("📅 Multi-Day Backtest (Main Directory)", str(main_dir)))
+    # Count files in each directory
+    main_count = len(list(main_dir.glob("spy_options_eod_*.parquet"))) if main_dir.exists() else 0
+    repaired_count = len(list(repaired_dir.glob("spy_options_eod_*.parquet"))) if repaired_dir.exists() else 0
     
-    # Check repaired directory first
-    if repaired_dir.exists():
-        for file in repaired_dir.glob("spy_options_eod_*.parquet"):
+    # Add main directory first if it has more files
+    if main_count > 0:
+        files.append((f"📊 Multi-Day Backtest - Main Directory ({main_count} files)", str(main_dir)))
+    
+    # Add repaired directory if it exists
+    if repaired_count > 0:
+        files.append((f"✅ Multi-Day Backtest - Repaired Directory ({repaired_count} files)", str(repaired_dir)))
+    
+    # Don't add individual date files - they're not useful for backtesting
+    # A backtest needs multiple days to be meaningful
+    
+    if not files:
+        files.append(("❌ No data files found", ""))
+    
+    return files
+
+def get_data_coverage_info(data_dir):
+    """Get information about date coverage in the data directory"""
+    data_path = Path(data_dir)
+    if not data_path.exists():
+        return "No data directory found"
+    
+    files = list(data_path.glob("spy_options_eod_*.parquet"))
+    if not files:
+        return "No data files found"
+    
+    # Extract dates
+    dates = []
+    for file in files:
+        try:
             date_str = file.stem.split('_')[-1]
-            try:
-                date = datetime.strptime(date_str, '%Y%m%d')
-                files.append((f"✅ {date.strftime('%Y-%m-%d')} (Repaired)", str(file)))
-            except:
-                continue
+            date = datetime.strptime(date_str, '%Y%m%d')
+            dates.append(date)
+        except:
+            continue
     
-    # Check main directory
-    if main_dir.exists():
-        for file in main_dir.glob("spy_options_eod_*.parquet"):
-            date_str = file.stem.split('_')[-1]
-            try:
-                date = datetime.strptime(date_str, '%Y%m%d')
-                files.append((f"📊 {date.strftime('%Y-%m-%d')}", str(file)))
-            except:
-                continue
+    if not dates:
+        return "Could not parse dates from files"
     
-    return files  # Keep multi-day option at top
+    dates.sort()
+    first_date = dates[0].strftime('%Y-%m-%d')
+    last_date = dates[-1].strftime('%Y-%m-%d')
+    
+    # Count by year
+    years = {}
+    for date in dates:
+        year = date.year
+        years[year] = years.get(year, 0) + 1
+    
+    info = f"📊 Data Coverage: {first_date} to {last_date}\n"
+    info += f"📁 Total Files: {len(files)}\n"
+    info += "📅 Files by Year:\n"
+    for year in sorted(years.keys()):
+        info += f"   • {year}: {years[year]} days\n"
+    
+    return info
 
 def get_available_strategies():
     """Get list of available strategy files"""
@@ -173,19 +206,19 @@ def create_auditable_interface():
                     value=strategies[0][1] if strategies else None
                 )
                 
-                # Date inputs
+                # Date inputs with better defaults
                 start_date = gr.Textbox(
                     label="📅 Start Date",
                     placeholder="YYYY-MM-DD",
-                    value="2023-08-01",
-                    info="Start date for backtest (used for multi-day mode)"
+                    value="2022-01-01",
+                    info="Start date for backtest. Available: 2020-07 to 2025-07"
                 )
                 
                 end_date = gr.Textbox(
                     label="📅 End Date", 
                     placeholder="YYYY-MM-DD",
-                    value="2023-08-31",
-                    info="End date for backtest (used for multi-day mode)"
+                    value="2022-12-31",
+                    info="End date for backtest. Full years available: 2021-2024"
                 )
                 
                 # Capital input
@@ -200,6 +233,9 @@ def create_auditable_interface():
                 
                 # Run button
                 run_btn = gr.Button("🚀 Run Auditable Backtest", variant="primary", size="lg")
+                
+                # Data coverage info
+                data_info = gr.Markdown("### 📊 Data Coverage\nSelect a data source to see available dates...")
                 
                 # Status
                 status = gr.Markdown("### 📈 Status\nReady to run backtest...")
@@ -230,6 +266,18 @@ def create_auditable_interface():
             results = run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date, initial_capital)
             
             return results
+        
+        # Update data info when data source is selected
+        def update_data_info(data_file):
+            if not data_file:
+                return "### 📊 Data Coverage\nSelect a data source to see available dates..."
+            return f"### 📊 Data Coverage\n{get_data_coverage_info(data_file)}"
+        
+        data_file_dropdown.change(
+            fn=update_data_info,
+            inputs=[data_file_dropdown],
+            outputs=[data_info]
+        )
         
         run_btn.click(
             fn=on_run_backtest,

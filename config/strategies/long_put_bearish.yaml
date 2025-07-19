@@ -1,0 +1,58 @@
+# Long Put Strategy for Auditable Backtesting System
+name: "Long Put Bearish Strategy"
+description: "Bearish strategy using long puts with stop loss and profit targets"
+strategy_type: "long_put"  # Required field
+
+# Strategy Parameters
+parameters:
+  initial_capital: 100000
+  position_size: 0.15  # 15% of capital per position
+  max_positions: 3
+  max_hold_days: 30
+  entry_frequency: 3  # Days between entries
+
+# Advanced Option Selection
+use_advanced_selection: true
+option_selection:
+  method: "delta"
+  delta_criteria:
+    target: -0.40  # Negative delta for puts
+    tolerance: 0.10
+  dte_criteria:
+    minimum: 20
+    maximum: 45
+  liquidity_criteria:
+    min_volume: 100
+    min_open_interest: 500
+    max_spread_pct: 5.0
+
+# Exit Rules
+exit_rules:
+  - condition: "profit_target"
+    target_percent: 75  # Exit at 75% profit
+  - condition: "stop_loss"
+    stop_percent: -40  # Exit at 40% loss
+  - condition: "delta_stop"
+    min_delta: -0.15  # Exit if delta gets too small (in absolute terms)
+  - condition: "time_stop"
+    max_days: 30  # Maximum holding period
+
+# Optional: Greeks-based filters
+greeks_filters:
+  min_vega: 10.0  # Minimum vega for volatility exposure
+  max_theta: -0.20  # Maximum theta decay per day
+
+# Optional: Market regime filter
+market_regime:
+  use_iv_filter: true
+  min_iv_percentile: 30  # Only enter when IV is elevated
+
+# Risk Management
+risk_limits:
+  max_portfolio_delta: -1.5  # Maximum bearish exposure
+  daily_loss_limit_pct: 5.0
+
+# Export Settings
+export_results: true
+export_format: ["csv", "json"]
+create_charts: true
