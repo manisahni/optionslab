@@ -1292,8 +1292,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--multi-day":
         # Test multi-day backtest
         print("🧪 AUDIT: Running multi-day test backtest")
-        data_dir = "spy_options_downloader/spy_options_parquet"
-        config_file = "advanced_test_strategy.yaml"
+        data_dir = "../spy_options_downloader/spy_options_parquet"
+        config_file = "../advanced_test_strategy.yaml"
         start_date = "2022-08-01"
         end_date = "2022-08-10"
         
@@ -1304,8 +1304,8 @@ if __name__ == "__main__":
         results = run_auditable_backtest(data_dir, config_file, start_date, end_date)
     else:
         # Test with a single file (legacy mode)
-        data_file = "spy_options_downloader/spy_options_parquet/repaired/spy_options_eod_20230809.parquet"
-        config_file = "simple_test_strategy.yaml"
+        data_file = "../spy_options_downloader/spy_options_parquet/repaired/spy_options_eod_20230809.parquet"
+        config_file = "../simple_test_strategy.yaml"
         
         print("🧪 AUDIT: Running simple test backtest (single-day mode)")
         print(f"📁 Using data file: {data_file}")
@@ -1314,7 +1314,7 @@ if __name__ == "__main__":
         if not Path(data_file).exists():
             print(f"❌ AUDIT: Data file not found: {data_file}")
             print("🔍 AUDIT: Available repaired files:")
-            repaired_dir = Path("spy_options_downloader/spy_options_parquet/repaired")
+            repaired_dir = Path("../spy_options_downloader/spy_options_parquet/repaired")
             if repaired_dir.exists():
                 for file in repaired_dir.glob("*.parquet"):
                     print(f"   - {file.name}")

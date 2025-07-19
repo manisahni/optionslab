@@ -150,6 +150,15 @@ streamlit-backtester/tmp_trade_logs/*
 *.parquet
 *.h5
 *.hdf5
+*.csv
+
+# Data directories
+data/
+spy_options_data/
+
+# IMPORTANT: Never ignore the ThetaData client code
+!thetadata_client/
+!thetadata_client/**
 
 # Archive
 archive/

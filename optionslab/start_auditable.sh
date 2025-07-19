@@ -17,30 +17,30 @@ if [ ! -f "auditable_backtest.py" ]; then
     exit 1
 fi
 
-# Check if simple_test_strategy.yaml exists
-if [ ! -f "simple_test_strategy.yaml" ]; then
-    echo "❌ Error: simple_test_strategy.yaml not found!"
+# Check if simple_test_strategy.yaml exists in parent directory
+if [ ! -f "../simple_test_strategy.yaml" ]; then
+    echo "❌ Error: simple_test_strategy.yaml not found in parent directory!"
     echo "The test strategy configuration is required."
     exit 1
 fi
 
 echo "✅ All required files found!"
 
-# Check for data files
-if [ -d "spy_options_downloader/spy_options_parquet/repaired" ]; then
+# Check for data files (in parent directory)
+if [ -d "../spy_options_downloader/spy_options_parquet/repaired" ]; then
     echo "✅ Found repaired data files"
 else
     echo "⚠️  No repaired data files found"
 fi
 
-if [ -d "spy_options_downloader/spy_options_parquet" ]; then
+if [ -d "../spy_options_downloader/spy_options_parquet" ]; then
     echo "✅ Found main data directory"
 else
     echo "⚠️  No main data directory found"
 fi
 
-# Check for strategy files
-if [ -d "config/strategies" ]; then
+# Check for strategy files (in parent directory)
+if [ -f "../simple_test_strategy.yaml" ] || [ -f "../advanced_test_strategy.yaml" ]; then
     echo "✅ Found strategy configurations"
 else
     echo "⚠️  No strategy configurations found"

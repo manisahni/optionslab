@@ -27,8 +27,8 @@ from auditable_backtest import (
 
 def get_available_data_files():
     """Get list of available parquet files for selection"""
-    repaired_dir = Path("spy_options_downloader/spy_options_parquet/repaired")
-    main_dir = Path("spy_options_downloader/spy_options_parquet")
+    repaired_dir = Path("../spy_options_downloader/spy_options_parquet/repaired")
+    main_dir = Path("../spy_options_downloader/spy_options_parquet")
     
     files = []
     
@@ -65,7 +65,7 @@ def get_available_strategies():
     strategies = []
     
     # Check config/strategies directory
-    config_dir = Path("config/strategies")
+    config_dir = Path("../config/strategies")
     if config_dir.exists():
         for file in config_dir.glob("*.yaml"):
             try:
@@ -77,12 +77,12 @@ def get_available_strategies():
                 strategies.append((f"📋 {file.stem}", str(file)))
     
     # Add our simple test strategy
-    test_strategy = Path("simple_test_strategy.yaml")
+    test_strategy = Path("../simple_test_strategy.yaml")
     if test_strategy.exists():
         strategies.append(("🧪 Simple Long Call Test", str(test_strategy)))
     
     # Add advanced test strategy
-    advanced_strategy = Path("advanced_test_strategy.yaml")
+    advanced_strategy = Path("../advanced_test_strategy.yaml")
     if advanced_strategy.exists():
         strategies.append(("🚀 Advanced Long Call (Delta/DTE/Liquidity)", str(advanced_strategy)))
     

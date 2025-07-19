@@ -2,7 +2,7 @@ import os
 import glob
 import time
 from datetime import date, timedelta
-from thetadata.utils import fetch_paginated_csv
+from thetadata_client.utils import fetch_paginated_csv
 import pandas as pd
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
