@@ -1,0 +1,67 @@
+name: "Advanced Long Call Strategy"
+description: "Professional long call strategy with delta/DTE/liquidity filters"
+strategy_type: "long_call"
+
+# Enable advanced selection
+use_advanced_selection: true
+
+# Option selection parameters
+option_selection:
+  method: "delta"  # Use delta-based selection
+  
+  delta_criteria:
+    target: 0.30      # Target 30 delta options
+    tolerance: 0.05   # Accept 25-35 delta
+    
+  dte_criteria:
+    target: 45        # Target 45 days to expiration
+    minimum: 30       # No less than 30 DTE
+    maximum: 60       # No more than 60 DTE
+    
+  liquidity_criteria:
+    min_volume: 100          # Minimum daily volume
+    max_spread_pct: 0.15     # Maximum 15% bid-ask spread
+    
+  # Allow filter relaxation if no options meet all criteria
+  allow_relaxation: true
+
+# Position and risk parameters
+parameters:
+  initial_capital: 10000
+  position_size: 0.1         # 10% of capital per trade
+  max_hold_days: 21          # Exit after 21 days (optimal for 45 DTE)
+  entry_frequency: 7         # Check for entry weekly
+  max_positions: 3           # Allow up to 3 concurrent positions
+
+# Entry rules
+entry_rules:
+  - condition: "calendar_days"    # Use actual calendar days
+    frequency_days: 7             # Weekly entries
+    
+  - condition: "market_regime"    # Only enter in normal volatility
+    max_vix: 30
+    min_vix: 12
+    
+  - condition: "trend_filter"     # Only enter in uptrend
+    ma_period: 20
+    require_above_ma: true
+
+# Exit rules  
+exit_rules:
+  - condition: "time_stop"
+    max_days: 21
+    
+  - condition: "profit_target"
+    target_percent: 50       # Exit at 50% profit
+    
+  - condition: "stop_loss"
+    stop_percent: -30        # Exit at 30% loss
+    
+  - condition: "delta_stop"
+    min_delta: 0.10          # Exit if delta drops below 0.10
+
+# Risk management
+risk_management:
+  max_position_size: 0.1
+  max_portfolio_delta: 1.0   # Don't exceed 100% delta exposure
+  max_daily_loss: 0.05       # Stop trading after 5% daily loss

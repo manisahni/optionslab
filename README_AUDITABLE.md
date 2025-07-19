@@ -21,30 +21,6 @@ Navigate to: http://localhost:7860
 4. Click "Run Auditable Backtest"
 5. Review the full audit log
 
-### 4. Using ThetaData Integration (Optional)
-```python
-# Import ThetaData client
-from thetadata import ThetaDataTerminalClient
-
-# Connect to ThetaData Terminal (must be running locally)
-client = ThetaDataTerminalClient()
-
-# Discover option contracts
-contracts = await client.discover_option_contracts(
-    symbol='SPY',
-    target_dte=30,
-    right='C'
-)
-
-# Download historical data
-from thetadata.utils import discover_and_download_eod_chain
-data = discover_and_download_eod_chain(
-    symbol='SPY',
-    date='20241107',
-    target_dte=30
-)
-```
-
 ## 🔍 What Makes This System Trustworthy
 
 ### ✅ **Real Market Data**
@@ -78,11 +54,6 @@ thetadata-api/
 ├── auditable_backtest.py        # Auditable backtest engine
 ├── simple_test_strategy.yaml    # Example strategy
 ├── start_auditable.sh          # Startup script
-├── README_AUDITABLE.md         # Comprehensive documentation
-├── thetadata/                   # ThetaData Terminal API client
-│   ├── __init__.py             # Main client interface
-│   ├── utils.py                # Utility functions for data download
-│   └── discovery.py            # Contract discovery functions
 ├── spy_options_downloader/     # Real market data
 │   └── spy_options_parquet/
 │       ├── repaired/           # Working data files
@@ -117,21 +88,10 @@ parameters:
 
 ## 🔧 Configuration
 
-### Data Sources
-
-#### **Real Market Data (Current)**
+### Data Files
 - **Location**: `spy_options_downloader/spy_options_parquet/`
 - **Format**: Parquet files with real SPY options data
 - **Priority**: Repaired files are used first (more reliable)
-
-#### **ThetaData Terminal Integration**
-- **Client**: `thetadata/` - Full Python client for ThetaData Terminal API
-- **Features**: 
-  - Live option chain data
-  - Real-time Greeks and quotes
-  - Historical data download
-  - Contract discovery and filtering
-- **Usage**: Connect to locally running ThetaData Terminal for live data
 
 ### Strategy Files
 - **Location**: `config/strategies/` and root directory
@@ -198,11 +158,6 @@ parameters:
 - PyYAML (for strategy configuration)
 - NumPy (for calculations)
 
-### Data Sources
-- **Real Market Data**: SPY options data from parquet files
-- **ThetaData Integration**: Full ThetaData Terminal API client for live data
-- **Data Download**: Functions to fetch option chains, Greeks, and historical data
-
 ### File Formats
 - **Data**: Parquet files with SPY options data
 - **Strategies**: YAML configuration files
@@ -227,4 +182,4 @@ This project is for educational and research purposes. Use at your own risk for 
 
 ---
 
-**Remember**: This system provides transparency and auditability, but all trading involves risk. Always verify results and understand the underlying calculations before making any trading decisions.
+**Remember**: This system provides transparency and auditability, but all trading involves risk. Always verify results and understand the underlying calculations before making any trading decisions. 

@@ -1,0 +1,25 @@
+name: "Simple Long Call Test"
+description: "Basic long call strategy for data flow auditing"
+strategy_type: "long_call"
+parameters:
+  initial_capital: 10000
+  position_size: 0.1  # 10% of capital per trade
+  max_hold_days: 5
+  entry_frequency: 3  # Every 3 days
+
+entry_rules:
+  - condition: "market_open"
+    action: "buy_call"
+    strike_selection: "atm_plus_2"  # 2% above current price
+    expiration_selection: "30_days"
+
+exit_rules:
+  - condition: "days_held >= 5"
+    action: "sell"
+  - condition: "end_of_period"
+    action: "sell"
+
+risk_management:
+  max_position_size: 0.1
+  stop_loss: null
+  take_profit: null 
