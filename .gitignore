@@ -167,3 +167,9 @@ archive/
 results/
 backtest_*.png
 backtest_*.json
+
+# OptionsLab trade logs
+optionslab/trade_logs/*.json
+optionslab/trade_logs/*.csv
+!optionslab/trade_logs/index.json
+optionslab/gradio_output.log
