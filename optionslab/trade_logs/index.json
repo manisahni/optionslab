@@ -278,8 +278,171 @@
           "stop loss (-39.3% <= -30%)": 1
         }
       }
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/advanced_test_strategy_20250720_112910_Dynamic_Wolf_1129.json",
+      "json_path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/advanced_test_strategy_20250720_112910_Dynamic_Wolf_1129.json",
+      "csv_path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/advanced_test_strategy_20250720_112910_Dynamic_Wolf_1129.csv",
+      "memorable_name": "Dynamic Wolf-1129",
+      "strategy": "advanced_test_strategy",
+      "start_date": "2022-01-01",
+      "end_date": "2022-12-31",
+      "backtest_date": "2025-07-20T11:29:10.617843",
+      "initial_capital": 10000,
+      "final_value": 4983.0,
+      "total_return": -0.5017,
+      "total_trades": 51,
+      "win_rate": 25.49019607843137,
+      "strategy_config": {
+        "name": "Advanced Long Call Strategy",
+        "description": "Professional long call strategy with delta/DTE/liquidity filters",
+        "strategy_type": "long_call",
+        "use_advanced_selection": true,
+        "option_selection": {
+          "method": "delta",
+          "delta_criteria": {
+            "target": 0.3,
+            "tolerance": 0.05
+          },
+          "dte_criteria": {
+            "target": 45,
+            "minimum": 30,
+            "maximum": 60
+          },
+          "liquidity_criteria": {
+            "min_volume": 100,
+            "max_spread_pct": 0.15
+          },
+          "allow_relaxation": true
+        },
+        "parameters": {
+          "initial_capital": 10000,
+          "position_size": 0.1,
+          "max_hold_days": 21,
+          "entry_frequency": 7,
+          "max_positions": 3
+        },
+        "entry_rules": {
+          "dte": 45,
+          "delta_target": 0.3,
+          "volume_min": 100,
+          "open_interest_min": 500
+        },
+        "exit_rules": [
+          {
+            "condition": "time_stop",
+            "max_days": 21
+          },
+          {
+            "condition": "profit_target",
+            "target_percent": 50
+          },
+          {
+            "condition": "stop_loss",
+            "stop_percent": -30
+          },
+          {
+            "condition": "delta_stop",
+            "min_delta": 0.1
+          }
+        ],
+        "risk_management": {
+          "max_position_size": 0.1,
+          "max_portfolio_delta": 1.0,
+          "max_daily_loss": 0.05
+        }
+      },
+      "implementation_metrics": {
+        "target_delta": 0.3,
+        "target_dte": 45,
+        "delta_tolerance": 0.05,
+        "dte_range": [
+          30,
+          60
+        ],
+        "total_trades": 51,
+        "issues": [],
+        "warnings": [],
+        "delta_analysis": {
+          "mean": 0.2962529411764706,
+          "std": 0.01532963748648767,
+          "min": 0.2685,
+          "max": 0.3334,
+          "within_tolerance": 51,
+          "outside_tolerance": 0
+        },
+        "dte_analysis": {
+          "mean": 39.94117647058823,
+          "std": 8.504697121339529,
+          "min": 30,
+          "max": 59,
+          "within_range": 51,
+          "outside_range": 0
+        },
+        "selection_process_summary": {
+          "avg_total_options": 7466.176470588235,
+          "avg_after_dte": 1094.7450980392157,
+          "avg_after_delta": 49.35294117647059,
+          "avg_after_liquidity": 29.470588235294116,
+          "trades_with_relaxed_criteria": 0
+        },
+        "status": "PASS",
+        "exit_reason_distribution": {
+          "stop loss (-52.9% <= -30%)": 1,
+          "stop loss (-37.7% <= -30%)": 1,
+          "profit target (90.4% >= 50%)": 1,
+          "profit target (53.4% >= 50%)": 1,
+          "profit target (50.1% >= 50%)": 1,
+          "profit target (59.8% >= 50%)": 1,
+          "stop loss (-59.9% <= -30%)": 1,
+          "stop loss (-37.5% <= -30%)": 1,
+          "stop loss (-40.5% <= -30%)": 1,
+          "profit target (58.8% >= 50%)": 1,
+          "stop loss (-43.4% <= -30%)": 1,
+          "stop loss (-40.8% <= -30%)": 1,
+          "stop loss (-63.5% <= -30%)": 1,
+          "stop loss (-37.3% <= -30%)": 1,
+          "profit target (77.1% >= 50%)": 1,
+          "stop loss (-43.1% <= -30%)": 1,
+          "stop loss (-40.2% <= -30%)": 1,
+          "stop loss (-54.8% <= -30%)": 1,
+          "stop loss (-38.2% <= -30%)": 1,
+          "stop loss (-34.1% <= -30%)": 1,
+          "stop loss (-41.0% <= -30%)": 1,
+          "stop loss (-35.4% <= -30%)": 1,
+          "stop loss (-49.7% <= -30%)": 1,
+          "stop loss (-61.1% <= -30%)": 1,
+          "profit target (72.8% >= 50%)": 1,
+          "stop loss (-36.4% <= -30%)": 1,
+          "stop loss (-51.5% <= -30%)": 1,
+          "stop loss (-45.8% <= -30%)": 1,
+          "stop loss (-36.2% <= -30%)": 1,
+          "profit target (84.8% >= 50%)": 1,
+          "stop loss (-30.6% <= -30%)": 1,
+          "stop loss (-42.0% <= -30%)": 1,
+          "stop loss (-53.3% <= -30%)": 1,
+          "stop loss (-38.3% <= -30%)": 1,
+          "stop loss (-55.9% <= -30%)": 1,
+          "profit target (67.3% >= 50%)": 1,
+          "profit target (59.2% >= 50%)": 1,
+          "stop loss (-41.1% <= -30%)": 1,
+          "stop loss (-34.5% <= -30%)": 1,
+          "profit target (71.1% >= 50%)": 1,
+          "stop loss (-37.1% <= -30%)": 1,
+          "stop loss (-45.6% <= -30%)": 1,
+          "stop loss (-43.6% <= -30%)": 1,
+          "profit target (64.8% >= 50%)": 1,
+          "stop loss (-41.2% <= -30%)": 1,
+          "stop loss (-71.0% <= -30%)": 1,
+          "profit target (72.7% >= 50%)": 1,
+          "stop loss (-38.7% <= -30%)": 1,
+          "stop loss (-66.4% <= -30%)": 1,
+          "stop loss (-41.7% <= -30%)": 1,
+          "stop loss (-39.3% <= -30%)": 1
+        }
+      }
     }
   ],
-  "last_updated": "2025-07-20T11:24:29.186608",
+  "last_updated": "2025-07-20T11:29:10.621017",
   "version": "1.0"
 }
