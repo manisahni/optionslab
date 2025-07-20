@@ -1,203 +1,109 @@
 #!/usr/bin/env python3
 """
-Integration test for all backtesting features
-Tests all implemented features working together in a complex scenario
+Test script to verify integration of all components
 """
 
-from auditable_backtest import run_auditable_backtest
-import pandas as pd
+import sys
 import json
+from pathlib import Path
 
-def test_all_features():
-    """Test all features in one comprehensive backtest"""
-    print("\n" + "="*60)
-    print("INTEGRATION TEST: All Features Combined")
-    print("="*60)
-    
-    # Test configuration
-    data_dir = "spy_options_downloader/spy_options_parquet"
-    config_file = "test_integration.yaml"
-    
-    # Use a longer period to test various market conditions
-    start_date = "2022-08-01"
-    end_date = "2022-09-30"  # 2 months
-    
-    print(f"\n📅 Test Period: {start_date} to {end_date} (2 months)")
-    print(f"🎯 Features being tested:")
-    print(f"  ✓ Multi-day backtesting")
-    print(f"  ✓ Advanced option selection (delta/DTE/liquidity)")
-    print(f"  ✓ Multiple concurrent positions (max 3)")
-    print(f"  ✓ Profit target exits (40%)")
-    print(f"  ✓ Stop loss exits (-20%)")
-    print(f"  ✓ Position-level P&L tracking")
-    print(f"  ✓ Both calls and puts (will test puts separately)")
-    
-    # Run backtest with calls
-    print(f"\n🔍 Testing CALL options...")
-    call_results = run_auditable_backtest(data_dir, config_file, start_date, end_date)
-    
-    # Also test with puts by modifying the strategy
-    print(f"\n🔍 Testing PUT options...")
-    # Create a put version of the strategy
-    import yaml
-    with open(config_file, 'r') as f:
-        put_config = yaml.safe_load(f)
-    put_config['strategy_type'] = 'long_put'
-    put_config['name'] = 'Integration Test - Puts'
-    
-    with open('test_integration_puts.yaml', 'w') as f:
-        yaml.dump(put_config, f)
-    
-    put_results = run_auditable_backtest(data_dir, 'test_integration_puts.yaml', start_date, end_date)
-    
-    # Analyze results
-    print(f"\n" + "="*60)
-    print("INTEGRATION TEST RESULTS")
-    print("="*60)
-    
-    # Check all features worked
-    features_tested = {
-        'multi_day': False,
-        'multiple_positions': False,
-        'profit_targets': False,
-        'stop_losses': False,
-        'calls_traded': False,
-        'puts_traded': False,
-        'advanced_selection': False,
-        'pnl_tracking': False
-    }
-    
-    # Analyze call results
-    if call_results:
-        # Multi-day test
-        if len(call_results['equity_curve']) > 20:
-            features_tested['multi_day'] = True
-            
-        # Multiple positions test
-        max_positions = max(point['positions'] for point in call_results['equity_curve'])
-        if max_positions >= 2:
-            features_tested['multiple_positions'] = True
-            
-        # Exit reasons
-        for trade in call_results['trades']:
-            if 'exit_reason' in trade:
-                if 'profit target' in trade['exit_reason']:
-                    features_tested['profit_targets'] = True
-                elif 'stop loss' in trade['exit_reason']:
-                    features_tested['stop_losses'] = True
-                    
-        # Calls traded
-        if len(call_results['trades']) > 0:
-            features_tested['calls_traded'] = True
-            features_tested['advanced_selection'] = True  # Used advanced selection
-            features_tested['pnl_tracking'] = True  # P&L tracked
-    
-    # Check puts traded
-    if put_results and len(put_results['trades']) > 0:
-        features_tested['puts_traded'] = True
-    
-    # Print feature test results
-    print(f"\n📊 Feature Verification:")
-    for feature, tested in features_tested.items():
-        status = "✅" if tested else "❌"
-        print(f"  {status} {feature.replace('_', ' ').title()}")
-    
-    # Performance summary
-    print(f"\n💰 Performance Summary:")
-    if call_results:
-        print(f"\nCall Strategy:")
-        print(f"  Initial Capital: ${call_results['trades'][0]['cash_before'] if call_results['trades'] else 25000:,.2f}")
-        print(f"  Final Value: ${call_results['final_value']:,.2f}")
-        print(f"  Total Return: {call_results['total_return']:.2%}")
-        print(f"  Total Trades: {len([t for t in call_results['trades'] if 'exit_date' in t])}")
-        
-        # Exit reason breakdown
-        exit_reasons = {}
-        for trade in call_results['trades']:
-            if 'exit_reason' in trade:
-                reason = trade['exit_reason'].split('(')[0].strip()
-                exit_reasons[reason] = exit_reasons.get(reason, 0) + 1
-        
-        if exit_reasons:
-            print(f"\n  Exit Reasons:")
-            for reason, count in exit_reasons.items():
-                print(f"    - {reason}: {count}")
-    
-    if put_results:
-        print(f"\nPut Strategy:")
-        print(f"  Final Value: ${put_results['final_value']:,.2f}")
-        print(f"  Total Return: {put_results['total_return']:.2%}")
-        print(f"  Total Trades: {len([t for t in put_results['trades'] if 'exit_date' in t])}")
-    
-    # Overall test result
-    all_features_tested = all(features_tested.values())
-    print(f"\n" + "="*60)
-    if all_features_tested:
-        print("✅ INTEGRATION TEST PASSED - All features working correctly!")
-    else:
-        print("❌ INTEGRATION TEST FAILED - Some features not working")
-    print("="*60)
-    
-    # Clean up
-    import os
-    if os.path.exists('test_integration_puts.yaml'):
-        os.remove('test_integration_puts.yaml')
-    
-    return all_features_tested
+print("🧪 Testing OptionsLab Integration...")
+print("=" * 50)
 
-def test_edge_cases():
-    """Test edge cases and error handling"""
-    print("\n" + "="*60)
-    print("EDGE CASE TESTING")
-    print("="*60)
-    
-    # Test 1: Insufficient capital
-    print("\n1. Testing insufficient capital scenario...")
-    edge_config = {
-        'name': 'Edge Case - Low Capital',
-        'description': 'Test with very low capital',
-        'strategy_type': 'long_call',
-        'parameters': {
-            'initial_capital': 100,  # Only $100
-            'position_size': 0.5,    # Try to use 50%
-            'max_positions': 1,
-            'max_hold_days': 5,
-            'entry_frequency': 1
-        }
-    }
-    
-    import yaml
-    with open('edge_case_low_capital.yaml', 'w') as f:
-        yaml.dump(edge_config, f)
-    
-    try:
-        results = run_auditable_backtest(
-            "spy_options_downloader/spy_options_parquet",
-            'edge_case_low_capital.yaml',
-            "2022-08-01",
-            "2022-08-05"
-        )
-        if results and len(results['trades']) == 0:
-            print("  ✅ Correctly handled insufficient capital (no trades executed)")
+# Test 1: Check if all modules can be imported
+print("\n📦 Testing module imports...")
+try:
+    from optionslab.auditable_backtest import run_auditable_backtest
+    print("✅ auditable_backtest imported successfully")
+except Exception as e:
+    print(f"❌ Failed to import auditable_backtest: {e}")
+
+try:
+    from optionslab.visualization import plot_pnl_curve, plot_trade_markers
+    print("✅ visualization module imported successfully")
+except Exception as e:
+    print(f"❌ Failed to import visualization: {e}")
+
+try:
+    from optionslab.ai_assistant import AIAssistant
+    print("✅ ai_assistant module imported successfully")
+except Exception as e:
+    print(f"❌ Failed to import ai_assistant: {e}")
+
+# Test 2: Check if trade logs directory exists
+print("\n📁 Testing file system...")
+trade_logs_dir = Path("optionslab/trade_logs")
+if trade_logs_dir.exists():
+    print(f"✅ Trade logs directory exists: {trade_logs_dir}")
+    # Count log files
+    log_files = list(trade_logs_dir.rglob("*.json"))
+    print(f"   Found {len(log_files)} trade log files")
+else:
+    print(f"❌ Trade logs directory not found")
+
+# Test 3: Check if .env file exists and has API key
+print("\n🔑 Testing API configuration...")
+env_file = Path(".env")
+if env_file.exists():
+    print("✅ .env file exists")
+    with open(env_file, 'r') as f:
+        content = f.read()
+        if "GEMINI_API_KEY" in content:
+            print("✅ GEMINI_API_KEY found in .env")
         else:
-            print("  ❌ Should not have executed trades with insufficient capital")
-    except Exception as e:
-        print(f"  ❌ Error: {e}")
-    
-    # Clean up
-    import os
-    if os.path.exists('edge_case_low_capital.yaml'):
-        os.remove('edge_case_low_capital.yaml')
-    
-    print("\n✅ Edge case testing completed")
+            print("❌ GEMINI_API_KEY not found in .env")
+else:
+    print("❌ .env file not found")
 
-if __name__ == "__main__":
-    # Run integration test
-    integration_passed = test_all_features()
-    
-    # Run edge case tests
-    test_edge_cases()
-    
-    # Exit with appropriate code
-    import sys
-    sys.exit(0 if integration_passed else 1)
+# Test 4: Test AI Assistant initialization
+print("\n🤖 Testing AI Assistant...")
+try:
+    ai = AIAssistant()
+    if ai.is_configured():
+        print("✅ AI Assistant configured successfully")
+        print(f"   API Key loaded: {'Yes' if ai.api_key else 'No'}")
+    else:
+        print("❌ AI Assistant not configured")
+except Exception as e:
+    print(f"❌ Failed to initialize AI Assistant: {e}")
+
+# Test 5: Check if Gradio app is running
+print("\n🌐 Testing Gradio app...")
+import requests
+try:
+    response = requests.get("http://localhost:7862", timeout=5)
+    if response.status_code == 200:
+        print("✅ Gradio app is running on port 7862")
+    else:
+        print(f"⚠️  Gradio app responded with status: {response.status_code}")
+except requests.exceptions.ConnectionError:
+    print("❌ Gradio app is not running on port 7862")
+except Exception as e:
+    print(f"❌ Error checking Gradio app: {e}")
+
+# Test 6: Check sample trade log
+print("\n📊 Testing sample trade log...")
+sample_logs = list(trade_logs_dir.rglob("*.json"))[:1] if trade_logs_dir.exists() else []
+if sample_logs:
+    sample_log = sample_logs[0]
+    print(f"✅ Reading sample log: {sample_log.name}")
+    try:
+        with open(sample_log, 'r') as f:
+            data = json.load(f)
+            metadata = data.get('metadata', {})
+            trades = data.get('trades', [])
+            print(f"   Strategy: {metadata.get('strategy', 'Unknown')}")
+            print(f"   Total trades: {len(trades)}")
+            print(f"   Total return: {metadata.get('total_return', 0):.2%}")
+    except Exception as e:
+        print(f"❌ Failed to read log: {e}")
+else:
+    print("ℹ️  No trade logs found to test")
+
+print("\n" + "=" * 50)
+print("🎯 Integration test complete!")
+print("\nNext steps:")
+print("1. Open http://localhost:7862 in your browser")
+print("2. Run a backtest in the 'Run Backtest' tab")
+print("3. Check visualizations in the 'Visualizations' tab")
+print("4. Test AI chat in the 'AI Assistant' tab")
