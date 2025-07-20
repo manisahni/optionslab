@@ -69,15 +69,16 @@ class AIAssistant:
         """Check if AI is properly configured"""
         return self.api_key is not None and self.model is not None
     
-    def load_context(self, context_type: str = "all") -> str:
+    def load_context(self, context_type: str = "all", backtest_path: str = None) -> str:
         """Load context data for the AI"""
         context_parts = []
         
-        if context_type in ["all", "trades"]:
-            # Load recent trade logs
-            trade_context = self._load_trade_logs()
-            if trade_context:
-                context_parts.append(f"=== RECENT TRADE LOGS ===\n{trade_context}")
+        # Always load code and strategies for comprehensive context
+        if context_type in ["all", "code"]:
+            # Load relevant source code
+            code_context = self._load_source_code()
+            if code_context:
+                context_parts.append(f"=== SOURCE CODE CONTEXT ===\n{code_context}")
         
         if context_type in ["all", "strategies"]:
             # Load strategy configurations
@@ -85,25 +86,49 @@ class AIAssistant:
             if strategy_context:
                 context_parts.append(f"=== STRATEGY CONFIGURATIONS ===\n{strategy_context}")
         
-        if context_type in ["all", "code"]:
-            # Load relevant source code
-            code_context = self._load_source_code()
-            if code_context:
-                context_parts.append(f"=== SOURCE CODE CONTEXT ===\n{code_context}")
+        # Load specific backtest if provided, otherwise load recent logs
+        if backtest_path and context_type in ["all", "trades"]:
+            # Load specific backtest
+            backtest_context = self._load_specific_backtest(backtest_path)
+            if backtest_context:
+                context_parts.append(f"=== SELECTED BACKTEST DATA ===\n{backtest_context}")
+        elif context_type in ["all", "trades"]:
+            # Load recent trade logs
+            trade_context = self._load_trade_logs()
+            if trade_context:
+                context_parts.append(f"=== RECENT TRADE LOGS ===\n{trade_context}")
+        
+        if context_type in ["all", "debug"]:
+            # Load debug logs
+            debug_context = self._load_debug_logs()
+            if debug_context:
+                context_parts.append(f"=== DEBUG LOGS ===\n{debug_context}")
         
         full_context = "\n\n".join(context_parts)
         
         if full_context and self.chat_session:
             # Send context to AI
             try:
-                self.chat_session.send_message(
+                response = self.chat_session.send_message(
                     f"I'm going to provide you with context about an options trading system. "
                     f"Please analyze this data and be ready to answer questions about trades, "
                     f"strategies, and performance:\n\n{full_context}"
                 )
                 self.context_loaded = True
-                return "Context loaded successfully!"
+                
+                # Provide a summary of what was loaded
+                summary_parts = []
+                if context_type in ["all", "trades"]:
+                    summary_parts.append("✅ Trade logs loaded")
+                if context_type in ["all", "strategies"]:
+                    summary_parts.append("✅ Strategy configurations loaded")
+                if context_type in ["all", "code"]:
+                    summary_parts.append("✅ Source code context loaded")
+                
+                summary = " | ".join(summary_parts)
+                return f"**Context loaded successfully!**\n\n{summary}\n\nI've analyzed the {context_type} data and I'm ready to help you with:\n- Trade performance analysis\n- Strategy optimization suggestions\n- Risk management recommendations\n- Pattern identification in your trading results\n\nWhat would you like to explore?"
             except Exception as e:
+                self.context_loaded = False
                 return f"Error loading context: {str(e)}"
         
         return "No context available or AI not configured"
@@ -164,39 +189,141 @@ Parameters: {json.dumps(config.get('parameters', {}), indent=2)}
         return "\n---\n".join(summaries)
     
     def _load_source_code(self) -> str:
-        """Load key source code snippets"""
-        # Load key function signatures and docstrings
+        """Load comprehensive source code context"""
+        # Load key files with important functions
         key_files = [
-            "auditable_backtest.py",
-            "auditable_gradio_app.py"
+            ("auditable_backtest.py", ["find_suitable_options_advanced", "run_auditable_backtest", "create_implementation_metrics"]),
+            ("auditable_gradio_app.py", ["save_trade_log", "analyze_current_backtest"]),
+            ("ai_assistant.py", ["analyze_trades", "load_context"])
         ]
         
         code_summaries = []
-        for filename in key_files:
+        for filename, important_functions in key_files:
             file_path = Path(__file__).parent / filename
             if file_path.exists():
                 with open(file_path, 'r') as f:
-                    lines = f.readlines()
+                    content = f.read()
                 
-                # Extract function definitions and docstrings
-                functions = []
-                for i, line in enumerate(lines):
-                    if line.strip().startswith('def '):
-                        func_name = line.strip()
-                        # Get docstring if exists
-                        if i + 1 < len(lines) and '"""' in lines[i + 1]:
-                            docstring = lines[i + 1].strip()
-                            functions.append(f"{func_name}\n    {docstring}")
+                # Extract important functions with their full implementation
+                file_summary = f"=== File: {filename} ===\nPath: {file_path}\n\n"
                 
-                if functions:
-                    code_summaries.append(f"File: {filename}\nFunctions:\n" + "\n".join(functions[:10]))
+                for func_name in important_functions:
+                    # Find function definition
+                    import re
+                    pattern = rf'def {func_name}\(.*?\):\s*\n(.*?)(?=\ndef|\nclass|\Z)'
+                    match = re.search(pattern, content, re.DOTALL)
+                    if match:
+                        # Get first 50 lines of the function
+                        func_lines = match.group(0).split('\n')[:50]
+                        file_summary += f"Function: {func_name}\n"
+                        file_summary += '\n'.join(func_lines[:20]) + "\n...\n\n"
+                
+                code_summaries.append(file_summary)
         
         return "\n---\n".join(code_summaries)
     
-    def analyze_trades(self, trades: List[Dict]) -> str:
-        """Analyze a list of trades and provide insights"""
+    def _load_debug_logs(self, limit: int = 1) -> str:
+        """Load recent debug logs"""
+        if not self.debug_logs_dir.exists():
+            return ""
+        
+        # Get most recent debug log
+        debug_files = sorted(self.debug_logs_dir.glob("backtest_debug_*.log"), reverse=True)
+        if not debug_files:
+            return ""
+        
+        summaries = []
+        for debug_file in debug_files[:limit]:
+            try:
+                with open(debug_file, 'r') as f:
+                    lines = f.readlines()
+                
+                # Extract key sections
+                summary = f"Debug Log: {debug_file.name}\n"
+                summary += f"Size: {len(lines)} lines\n"
+                
+                # Get first 100 lines and last 100 lines
+                if len(lines) > 200:
+                    summary += "First 50 lines:\n" + ''.join(lines[:50])
+                    summary += "\n... [middle section omitted] ...\n\n"
+                    summary += "Last 50 lines:\n" + ''.join(lines[-50:])
+                else:
+                    summary += ''.join(lines)
+                
+                summaries.append(summary)
+            except:
+                continue
+        
+        return "\n---\n".join(summaries)
+    
+    def _load_specific_backtest(self, backtest_path: str) -> str:
+        """Load a specific backtest's complete data"""
+        path = Path(backtest_path)
+        if not path.exists():
+            return f"Backtest file not found: {backtest_path}"
+        
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+            
+            metadata = data.get('metadata', {})
+            trades = data.get('trades', [])
+            
+            summary = f"""
+Backtest: {metadata.get('memorable_name', 'Unknown')}
+Display Name: {metadata.get('display_name', 'N/A')}
+Strategy: {metadata.get('strategy', 'Unknown')}
+Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
+Initial Capital: ${metadata.get('initial_capital', 0):,.2f}
+Final Value: ${metadata.get('final_value', 0):,.2f}
+Total Return: {metadata.get('total_return', 0):.2%}
+Win Rate: {metadata.get('win_rate', 0):.1%}
+Total Trades: {metadata.get('total_trades', 0)}
+
+Implementation Metrics:
+{json.dumps(metadata.get('implementation_metrics', {}), indent=2)}
+
+Strategy Configuration:
+{json.dumps(metadata.get('strategy_config', {}), indent=2)}
+
+Trade Details ({len(trades)} trades):
+"""
+            # Add detailed trade information
+            for i, trade in enumerate(trades[:20]):  # Show first 20 trades
+                summary += f"\n==== Trade {i+1} ====\n"
+                summary += f"Entry Date: {trade.get('entry_date')} | Exit Date: {trade.get('exit_date', 'Open')}\n"
+                summary += f"Option Type: {trade.get('option_type')} | Strike: ${trade.get('strike', 0):.2f}\n"
+                summary += f"Entry Price: ${trade.get('option_price', 0):.2f} | Exit Price: ${trade.get('exit_price', 0):.2f}\n"
+                summary += f"Entry Delta: {trade.get('entry_delta', 'N/A')} | DTE: {trade.get('dte_at_entry', 'N/A')}\n"
+                summary += f"P&L: ${trade.get('pnl', 0):.2f} ({trade.get('pnl_pct', 0):.1f}%)\n"
+                summary += f"Exit Reason: {trade.get('exit_reason', 'N/A')}\n"
+                
+                # Include selection process if available
+                if trade.get('selection_process'):
+                    summary += f"Selection Process: {json.dumps(trade['selection_process'], indent=2)}\n"
+            
+            if len(trades) > 20:
+                summary += f"\n... and {len(trades) - 20} more trades\n"
+            
+            # Include file paths for reference
+            summary += f"\n\nFile Locations:\n"
+            summary += f"JSON: {backtest_path}\n"
+            csv_path = path.with_suffix('.csv')
+            if csv_path.exists():
+                summary += f"CSV: {csv_path}\n"
+            
+            return summary
+        except Exception as e:
+            return f"Error loading backtest: {str(e)}"
+    
+    def analyze_trades(self, trades: List[Dict], strategy_config: Dict = None, implementation_metrics: Dict = None, 
+                       backtest_info: Dict = None, strategy_yaml: str = None) -> str:
+        """Analyze a list of trades with two-phase approach"""
         if not self.is_configured():
             return "AI not configured. Please set API key."
+        
+        if not self.chat_session:
+            return "Chat session not initialized. Please reload the AI assistant."
         
         if not trades:
             return "No trades to analyze."
@@ -208,26 +335,255 @@ Parameters: {json.dumps(config.get('parameters', {}), indent=2)}
         if completed.empty:
             return "No completed trades to analyze."
         
-        summary = f"""
-Trade Analysis Request:
-- Total Trades: {len(completed)}
-- Win Rate: {(completed['pnl'] > 0).mean():.1%}
-- Average P&L: ${completed['pnl'].mean():.2f}
-- Best Trade: ${completed['pnl'].max():.2f}
-- Worst Trade: ${completed['pnl'].min():.2f}
-- Most Common Exit: {completed['exit_reason'].mode().values[0] if not completed['exit_reason'].mode().empty else 'N/A'}
+        # Extract strategy details if available
+        strategy_details = ""
+        if strategy_config:
+            entry_rules = strategy_config.get('entry_rules', {})
+            exit_rules = strategy_config.get('exit_rules', [])
+            strategy_details = f"""
+Strategy Configuration:
+- Name: {strategy_config.get('name', 'Unknown')}
+- Entry Delta Target: {entry_rules.get('delta_target', 'N/A')}
+- Entry DTE: {entry_rules.get('dte', 'N/A')}
+- Exit Rules: {[rule.get('condition', '') for rule in exit_rules]}
+"""
+        
+        # Add implementation metrics if available
+        implementation_summary = ""
+        if implementation_metrics:
+            implementation_summary = f"""
+Implementation Metrics Summary:
+- Status: {implementation_metrics.get('status', 'UNKNOWN')}
+- Delta Analysis: Mean={implementation_metrics.get('delta_analysis', {}).get('mean', 0):.3f}, Target={implementation_metrics.get('target_delta', 0.40):.2f}
+- DTE Analysis: Mean={implementation_metrics.get('dte_analysis', {}).get('mean', 0):.1f}, Target={implementation_metrics.get('target_dte', 30)}
+- Issues: {implementation_metrics.get('issues', [])}
+- Warnings: {implementation_metrics.get('warnings', [])}
 
-Sample trades:
-{completed[['trade_id', 'option_type', 'strike', 'entry_date', 'exit_date', 'pnl', 'pnl_pct', 'exit_reason']].head(5).to_string()}
+Selection Process Summary:
+{implementation_metrics.get('selection_process_summary', {})}
+"""
+        
+        # Add backtest identification
+        backtest_identification = ""
+        if backtest_info:
+            backtest_identification = f"""
+=== BACKTEST IDENTIFICATION ===
+Analyzing: {backtest_info.get('memorable_name', 'Unknown Backtest')}
+Display Name: {backtest_info.get('display_name', 'N/A')}
+Strategy: {backtest_info.get('strategy_name', 'Unknown')}
+Date Range: {backtest_info.get('start_date', 'N/A')} to {backtest_info.get('end_date', 'N/A')}
+Trade Count: {len(trades)} trades executed
 
-Please provide:
-1. Key patterns in winning vs losing trades
-2. Suggestions for strategy improvement
-3. Risk management recommendations
+Log Files:
+- CSV: {backtest_info.get('csv_path', 'Not available')}
+- JSON: {backtest_info.get('json_path', 'Not available')}
+
+=== DATA VERIFICATION ===
+✓ Trade details received: {len(trades)} trades with {'selection process data' if any(t.get('selection_process') for t in trades) else 'basic data only'}
+✓ Implementation metrics: {'Available - Status: ' + implementation_metrics.get('status', 'Unknown') if implementation_metrics else 'Not available'}
+✓ Strategy config: {'Loaded - ' + str(strategy_config.get('name', 'Unknown')) if strategy_config else 'Not loaded'}
+"""
+        
+        # Calculate performance emoji
+        total_return = backtest_info.get('total_return', 0) if backtest_info else 0
+        if total_return > 0.1:
+            perf_emoji = "🚀"
+        elif total_return > 0:
+            perf_emoji = "📈"
+        elif total_return > -0.1:
+            perf_emoji = "📉"
+        else:
+            perf_emoji = "💥"
+            
+        prompt = f"""
+You are an expert options trading strategy analyst with full access to the backtesting system's source code, logs, and configuration. 
+
+PROVIDE YOUR ANALYSIS IN THIS EXACT STRUCTURE:
+
+═══════════════════════════════════════════════════
+🎯 BACKTEST ANALYSIS: {backtest_info.get('memorable_name', 'Unknown') if backtest_info else 'Unknown'}
+═══════════════════════════════════════════════════
+
+📅 Date Range: {backtest_info.get('start_date', 'N/A') if backtest_info else 'N/A'} to {backtest_info.get('end_date', 'N/A') if backtest_info else 'N/A'}
+🏆 Performance: {total_return:.2%} ({perf_emoji})
+📁 Files: {backtest_info.get('json_path', 'N/A') if backtest_info else 'N/A'}
+
+═══════════════════════════════════════════════════
+📋 STRATEGY CONFIGURATION ({strategy_config.get('name', 'Unknown').lower().replace(' ', '_')}.yaml)
+═══════════════════════════════════════════════════
+```yaml
+{strategy_yaml if strategy_yaml else 'Configuration not available'}
+```
+
+═══════════════════════════════════════════════════
+📊 PERFORMANCE METRICS
+═══════════════════════════════════════════════════
+
+📊 PERFORMANCE RESULTS:
+• Total Trades Executed: {len(completed)}
+• Win Rate: {(completed['pnl'] > 0).mean():.1%} ({len(completed[completed['pnl'] > 0])} wins / {len(completed)} trades)
+• Total P&L: ${completed['pnl'].sum():.2f}
+• Average P&L per Trade: ${completed['pnl'].mean():.2f}
+• Best Trade: ${completed['pnl'].max():.2f}
+• Worst Trade: ${completed['pnl'].min():.2f}
+• Average Win: ${completed[completed['pnl'] > 0]['pnl'].mean():.2f if len(completed[completed['pnl'] > 0]) > 0 else 0:.2f}
+• Average Loss: ${completed[completed['pnl'] <= 0]['pnl'].mean():.2f if len(completed[completed['pnl'] <= 0]) > 0 else 0:.2f}
+
+📈 EXIT REASONS BREAKDOWN:
+{completed['exit_reason'].value_counts().to_string()}
+
+═══════════════════════════════════════════════════
+✅ DATA AVAILABILITY
+═══════════════════════════════════════════════════
+✓ {len(trades)} complete trade records with Greeks
+✓ Selection process data: {'Available' if any(t.get('selection_process') for t in trades) else 'Not available'}
+✓ Entry/exit prices and reasons for all trades
+✓ Source code: auditable_backtest.py ({sum(1 for line in open(Path(__file__).parent / 'auditable_backtest.py', 'r')) if (Path(__file__).parent / 'auditable_backtest.py').exists() else 'N/A'} lines)
+✓ Implementation metrics: {implementation_metrics.get('status', 'Not available') if implementation_metrics else 'Not available'}
+
+═══════════════════════════════════════════════════
+🔧 TECHNICAL ROBUSTNESS ASSESSMENT
+═══════════════════════════════════════════════════
+
+Analyze the implementation and identify any critical issues:
+
+Based on implementation metrics, identify any critical issues:
+
+⚠️ CRITICAL ISSUES FOUND:
+[List specific implementation problems, e.g.:]
+- Delta targeting failure (if applicable)
+- DTE selection errors
+- Exit rule misconfiguration
+- Data quality issues
+
+OR if no issues:
+✅ No critical implementation issues found
+
+═══════════════════════════════════════════════════
+💡 IMMEDIATE RECOMMENDATIONS
+═══════════════════════════════════════════════════
+
+1. **Implementation Fixes** (if needed):
+   - [Specific code fixes with line numbers]
+   
+2. **Strategy Improvements**:
+   - [Based on performance data]
+   
+3. **Risk Management**:
+   - [Specific suggestions]
+
+THEN proceed with detailed analysis as requested:
+
+✅ Implementation Status: [Clearly state PASS or FAIL]
+
+📌 Option Selection Accuracy:
+   • Delta Targeting:
+     - Target: {entry_rules.get('delta_target', '0.40')} ± {implementation_metrics.get('delta_tolerance', 0.05)}
+     - Actual Average: [Calculate from data]
+     - Accuracy: [X%] of trades within tolerance
+     - Issues: [Any systematic bias?]
+   
+   • DTE Selection:
+     - Target: {entry_rules.get('dte', '30')} days (range: {implementation_metrics.get('dte_range', [25, 35])})
+     - Actual Average: [Calculate from data]
+     - Accuracy: [X%] of trades within range
+     - Issues: [Any systematic bias?]
+
+📌 Trade Execution Mechanics:
+   • Entry Frequency: Are trades being entered as configured?
+   • Position Sizing: Is the position size consistent with configuration?
+   • Exit Rules Compliance:
+     - Profit Target ({[rule.get('target_percent') for rule in strategy_config.get('exit_rules', []) if rule.get('condition') == 'profit_target']}%): [Working correctly?]
+     - Stop Loss ({[rule.get('stop_percent') for rule in strategy_config.get('exit_rules', []) if rule.get('condition') == 'stop_loss']}%): [Working correctly?]
+     - Time Stop ({[rule.get('max_days') for rule in strategy_config.get('exit_rules', []) if rule.get('condition') == 'time_stop']} days): [Working correctly?]
+
+📌 Selection Process Efficiency:
+   • Average options available: {implementation_metrics.get('selection_process_summary', {}).get('avg_total_options', 'N/A')}
+   • After all filters: {implementation_metrics.get('selection_process_summary', {}).get('avg_after_liquidity', 'N/A')}
+   • Criteria relaxation rate: {implementation_metrics.get('selection_process_summary', {}).get('trades_with_relaxed_criteria', 0)} trades
+
+📌 Data Quality Check:
+   • Greeks data: [Available/Missing for X% of trades]
+   • Price spreads: [Reasonable/Suspicious]
+   • Any anomalies: [List any data issues]
+
+⚠️ Implementation Issues Found:
+{chr(10).join(f'   • {issue}' for issue in implementation_metrics.get('issues', [])) if implementation_metrics.get('issues') else '   • None - Implementation appears correct'}
+
+🔧 Required Implementation Fixes:
+[If issues found, provide specific fixes needed in the code/configuration]
+
+═══════════════════════════════════════════════════
+💡 FINANCIAL STRATEGY OPTIMIZATION
+═══════════════════════════════════════════════════
+
+{"⚠️ IMPORTANT: Implementation issues must be fixed before strategy optimization is meaningful." if implementation_metrics.get('status') == 'FAIL' else "Implementation verified ✅ - Proceeding with strategy analysis:"}
+
+📈 Performance Analysis:
+   • Win Rate: {(completed['pnl'] > 0).mean():.1%} ({len(completed[completed['pnl'] > 0])} wins / {len(completed)} trades)
+   • Average Win: ${completed[completed['pnl'] > 0]['pnl'].mean():.2f} if any
+   • Average Loss: ${completed[completed['pnl'] <= 0]['pnl'].mean():.2f} if any
+   • Risk/Reward Ratio: [Calculate ratio]
+   • Maximum Drawdown: [Calculate if possible]
+
+🎯 Trade Pattern Analysis:
+   • Winning trades characteristics:
+     - Entry delta range: [Analyze winning trade deltas]
+     - Hold duration: [Average days for winners]
+     - Exit reasons: [What caused profitable exits?]
+   
+   • Losing trades characteristics:
+     - Entry delta range: [Analyze losing trade deltas]
+     - Hold duration: [Average days for losers]
+     - Exit reasons: [What caused losses?]
+
+📊 Strategy Optimization Recommendations:
+
+1. **Delta Selection Optimization**
+   - Current: {entry_rules.get('delta_target', '0.40')}
+   - Suggested: [Based on win/loss analysis]
+   - Rationale: [Explain why]
+
+2. **Exit Rule Refinements**
+   - Profit Target: [Current vs suggested]
+   - Stop Loss: [Current vs suggested]
+   - Time-based exits: [Analysis and suggestions]
+
+3. **Entry Timing Improvements**
+   - Add volatility filter: [If applicable]
+   - Market condition awareness: [Suggestions]
+   - Entry frequency optimization: [Analysis]
+
+4. **Risk Management Enhancements**
+   - Position sizing: [Current approach and improvements]
+   - Portfolio heat: [Max concurrent positions analysis]
+   - Capital preservation: [Suggestions]
+
+═══════════════════════════════════════════════════
+
+💬 **Ready for Further Discussion**
+
+Based on this analysis, I can help you explore:
+
+**Technical Topics:**
+- Specific code implementation details
+- Bug fixes or calculation corrections
+- How specific functions work (e.g., option selection algorithm)
+- Debug log analysis for specific trades
+- Custom modifications to the backtesting logic
+
+**Strategy Topics:**
+- Detailed parameter optimization
+- Alternative strategy approaches
+- Market regime adaptation
+- Risk management frameworks
+- Performance improvement ideas
+
+What aspect would you like to dive deeper into?
 """
         
         try:
-            response = self.chat_session.send_message(summary)
+            response = self.chat_session.send_message(prompt)
             return response.text
         except Exception as e:
             return f"Error analyzing trades: {str(e)}"
@@ -236,6 +592,9 @@ Please provide:
         """Chat with the AI assistant"""
         if not self.is_configured():
             return "AI not configured. Please set API key."
+        
+        if not self.chat_session:
+            return "Chat session not initialized. Please reload the AI assistant."
         
         # Add current data context if provided
         full_message = message

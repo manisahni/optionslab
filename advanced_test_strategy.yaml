@@ -35,16 +35,10 @@ parameters:
 
 # Entry rules
 entry_rules:
-  - condition: "calendar_days"    # Use actual calendar days
-    frequency_days: 7             # Weekly entries
-    
-  - condition: "market_regime"    # Only enter in normal volatility
-    max_vix: 30
-    min_vix: 12
-    
-  - condition: "trend_filter"     # Only enter in uptrend
-    ma_period: 20
-    require_above_ma: true
+  dte: 45                  # Days to expiration
+  delta_target: 0.30       # Target delta
+  volume_min: 100          # Minimum volume
+  open_interest_min: 500   # Minimum open interest
 
 # Exit rules  
 exit_rules:

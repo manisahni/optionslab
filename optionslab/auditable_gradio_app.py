@@ -16,6 +16,7 @@ import subprocess
 import sys
 import os
 import shutil
+import random
 from typing import List, Dict, Optional
 
 # Import our auditable backtest functions
@@ -43,15 +44,41 @@ def get_trade_logs_dir() -> Path:
     """Get the trade logs directory"""
     return Path(__file__).parent / "trade_logs"
 
+def generate_memorable_name() -> str:
+    """Generate a unique memorable name for the backtest"""
+    adjectives = [
+        "Swift", "Golden", "Silver", "Bold", "Wise", "Lucky", "Sharp", "Clever",
+        "Mighty", "Noble", "Brave", "Fierce", "Calm", "Bright", "Steady", "Agile",
+        "Iron", "Crystal", "Thunder", "Storm", "Fire", "Ice", "Shadow", "Light"
+    ]
+    
+    animals = [
+        "Eagle", "Tiger", "Fox", "Wolf", "Hawk", "Bear", "Lion", "Falcon",
+        "Dragon", "Phoenix", "Panther", "Shark", "Cobra", "Raven", "Bull", "Owl",
+        "Stallion", "Jaguar", "Viper", "Condor", "Lynx", "Rhino", "Cheetah", "Orca"
+    ]
+    
+    # Generate random combination
+    adjective = random.choice(adjectives)
+    animal = random.choice(animals)
+    
+    # Add a short unique identifier for absolute uniqueness
+    unique_id = datetime.now().strftime("%H%M")
+    
+    return f"{adjective} {animal}-{unique_id}"
+
 def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str, 
-                   start_date: str, end_date: str) -> tuple[str, str]:
-    """Save trade log to permanent storage and return paths"""
+                   start_date: str, end_date: str, strategy_config: dict = None) -> tuple[str, str, str]:
+    """Save trade log to permanent storage and return paths with memorable name"""
     # Create directory structure
     logs_dir = get_trade_logs_dir()
     now = datetime.now()
     year_dir = logs_dir / str(now.year)
     month_dir = year_dir / f"{now.month:02d}"
     month_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate memorable name
+    memorable_name = generate_memorable_name()
     
     # Generate filename
     timestamp = now.strftime("%Y%m%d_%H%M%S")
@@ -63,16 +90,31 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
     if not trades_df.empty:
         trades_df.to_csv(csv_path, index=False)
     
+    # Calculate performance emoji
+    total_return = results.get('total_return', 0)
+    if total_return > 0.1:
+        perf_emoji = "🚀"
+    elif total_return > 0:
+        perf_emoji = "📈"
+    elif total_return > -0.1:
+        perf_emoji = "📉"
+    else:
+        perf_emoji = "💥"
+    
     # Prepare JSON data with metadata
     json_data = {
         "metadata": {
+            "memorable_name": memorable_name,
+            "display_name": f"{memorable_name} - {strategy_name} ({total_return:.1%}{perf_emoji})",
             "strategy": strategy_name,
+            "strategy_config": strategy_config,
+            "implementation_metrics": results.get('implementation_metrics', {}),
             "backtest_date": now.isoformat(),
             "start_date": start_date,
             "end_date": end_date,
             "initial_capital": results.get('initial_capital', 0),
             "final_value": results.get('final_value', 0),
-            "total_return": results.get('total_return', 0),
+            "total_return": total_return,
             "total_trades": len(results.get('trades', [])),
             "win_rate": calculate_win_rate(results.get('trades', []))
         },
@@ -86,7 +128,7 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
     # Update index
     update_trade_log_index(json_path, json_data['metadata'])
     
-    return str(csv_path), str(json_path)
+    return str(csv_path), str(json_path), memorable_name
 
 def calculate_win_rate(trades: list) -> float:
     """Calculate win rate from trades"""
@@ -272,12 +314,73 @@ def get_data_coverage_info(data_dir):
     
     return info
 
+def get_available_backtests():
+    """Get list of saved backtests from trade logs"""
+    logs_dir = get_trade_logs_dir()
+    index_path = logs_dir / "index.json"
+    
+    if not index_path.exists():
+        return []
+    
+    try:
+        with open(index_path, 'r') as f:
+            index = json.load(f)
+    except:
+        return []
+    
+    # Format choices for dropdown
+    choices = []
+    for log in index.get('logs', []):
+        display_name = log.get('display_name', 'Unknown')
+        memorable_name = log.get('memorable_name', 'Unknown')
+        date_str = log.get('backtest_date', 'Unknown')
+        json_path = log.get('json_path', '')
+        
+        # Parse date for better display
+        try:
+            date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            date_display = date_obj.strftime('%Y-%m-%d %H:%M')
+        except:
+            date_display = date_str[:16] if len(date_str) > 16 else date_str
+        
+        # Create display string and value tuple
+        display = f"{memorable_name} - {display_name} ({date_display})"
+        choices.append((display, json_path))
+    
+    # Sort by date, most recent first
+    choices.sort(key=lambda x: x[0], reverse=True)
+    return choices
+
+def get_most_recent_backtest():
+    """Get the most recent backtest path and info"""
+    logs_dir = get_trade_logs_dir()
+    index_path = logs_dir / "index.json"
+    
+    if not index_path.exists():
+        return None, None
+    
+    try:
+        with open(index_path, 'r') as f:
+            index = json.load(f)
+    except:
+        return None, None
+    
+    logs = index.get('logs', [])
+    if not logs:
+        return None, None
+    
+    # Sort by date and get most recent
+    logs.sort(key=lambda x: x.get('backtest_date', ''), reverse=True)
+    most_recent = logs[0]
+    
+    return most_recent.get('json_path'), most_recent
+
 def get_available_strategies():
     """Get list of available strategy files"""
     strategies = []
     
     # Check config/strategies directory
-    config_dir = Path("../config/strategies")
+    config_dir = Path("config/strategies")
     if config_dir.exists():
         for file in config_dir.glob("*.yaml"):
             try:
@@ -382,9 +485,45 @@ def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date
             avg_loss = sum(t.get('pnl', 0) for t in losing_trades) / len(losing_trades) if losing_trades else 0
             profit_factor = abs(sum(t.get('pnl', 0) for t in winning_trades) / sum(t.get('pnl', 0) for t in losing_trades)) if losing_trades and sum(t.get('pnl', 0) for t in losing_trades) != 0 else 0
             
+            # Load strategy config for display
+            strategy_config = None
+            try:
+                with open(strategy_file, 'r') as f:
+                    strategy_config = yaml.safe_load(f)
+            except:
+                pass
+            
+            # Create strategy details section
+            strategy_details = ""
+            if strategy_config:
+                entry_rules = strategy_config.get('entry_rules', {})
+                exit_rules = strategy_config.get('exit_rules', [])
+                
+                strategy_details = f"""
+### 📋 Strategy Configuration: {strategy_config.get('name', 'Unknown')}
+**Description:** {strategy_config.get('description', 'N/A')}
+
+#### Entry Criteria:
+- **Target Delta:** {entry_rules.get('delta_target', 'N/A')}
+- **Days to Expiration:** {entry_rules.get('dte', 'N/A')}
+- **Min Volume:** {entry_rules.get('volume_min', 'N/A')}
+- **Min Open Interest:** {entry_rules.get('open_interest_min', 'N/A')}
+
+#### Exit Rules:
+"""
+                for rule in exit_rules:
+                    if rule.get('condition') == 'profit_target':
+                        strategy_details += f"- **Profit Target:** {rule.get('target_percent', 'N/A')}%\n"
+                    elif rule.get('condition') == 'stop_loss':
+                        strategy_details += f"- **Stop Loss:** {rule.get('stop_percent', 'N/A')}%\n"
+                    elif rule.get('condition') == 'time_stop':
+                        strategy_details += f"- **Time Stop:** {rule.get('max_days', 'N/A')} days\n"
+            
             # Create summary
             summary = f"""
 ## 📊 Backtest Results
+
+{strategy_details}
 
 ### Overall Performance
 - **Final Value:** ${results['final_value']:,.2f}
@@ -425,16 +564,25 @@ def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date
                 full_trades_df = pd.DataFrame(results['trades'])
                 full_trades_df.to_csv(trades_csv_path, index=False)
                 
+                # Load strategy config
+                strategy_config = None
+                try:
+                    with open(strategy_file, 'r') as f:
+                        strategy_config = yaml.safe_load(f)
+                except:
+                    pass
+                
                 # Also save to permanent storage
                 strategy_name = Path(strategy_file).stem.replace('_', '-')
                 # Add initial_capital to results for saving
                 results['initial_capital'] = initial_capital
-                perm_csv_path, perm_json_path = save_trade_log(
-                    full_trades_df, results, strategy_name, start_date, end_date
+                perm_csv_path, perm_json_path, memorable_name = save_trade_log(
+                    full_trades_df, results, strategy_name, start_date, end_date, strategy_config
                 )
                 
-                # Add permanent storage info to summary
-                summary += f"\n\n### 📁 Trade Log Saved\n- CSV: `{Path(perm_csv_path).name}`\n- JSON: `{Path(perm_json_path).name}`"
+                # Add permanent storage info to summary with memorable name
+                summary += f"\n\n### 🎯 Backtest Name: **{memorable_name}**\n"
+                summary += f"### 📁 Trade Log Saved\n- CSV: `{Path(perm_csv_path).name}`\n- JSON: `{Path(perm_json_path).name}`"
             else:
                 trades_csv_path = None
             
@@ -654,7 +802,16 @@ def create_auditable_interface():
                     choices = []
                     for log in logs:
                         size_mb = log.get('size', 0) / 1024 / 1024
-                        label = f"{Path(log['path']).name} ({size_mb:.1f} MB) - {log.get('backtest_date', 'Unknown date')}"
+                        # Use memorable name if available
+                        display_name = log.get('display_name')
+                        if not display_name:
+                            memorable_name = log.get('memorable_name', 'Unknown')
+                            strategy = log.get('strategy', 'Unknown')
+                            total_return = log.get('total_return', 0)
+                            perf_emoji = "🚀" if total_return > 0.1 else "📈" if total_return > 0 else "📉" if total_return > -0.1 else "💥"
+                            display_name = f"{memorable_name} - {strategy} ({total_return:.1%}{perf_emoji})"
+                        
+                        label = f"{display_name} | {size_mb:.1f} MB | {log.get('backtest_date', 'Unknown')[:10]}"
                         choices.append((label, log['path']))
                     
                     return gr.update(choices=choices, value=choices[0][1] if choices else None), f"Found {len(logs)} log files."
@@ -846,7 +1003,16 @@ def create_auditable_interface():
                     
                     choices = []
                     for log in logs:
-                        label = f"{log.get('strategy', 'Unknown')} - {log.get('backtest_date', 'Unknown')[:10]} ({log.get('total_trades', 0)} trades)"
+                        # Use memorable name if available, otherwise fall back to old format
+                        display_name = log.get('display_name')
+                        if not display_name:
+                            memorable_name = log.get('memorable_name', 'Unknown')
+                            strategy = log.get('strategy', 'Unknown')
+                            total_return = log.get('total_return', 0)
+                            perf_emoji = "🚀" if total_return > 0.1 else "📈" if total_return > 0 else "📉" if total_return > -0.1 else "💥"
+                            display_name = f"{memorable_name} - {strategy} ({total_return:.1%}{perf_emoji})"
+                        
+                        label = f"{display_name} | {log.get('backtest_date', 'Unknown')[:10]}"
                         choices.append((label, log['path']))
                     
                     return gr.update(choices=choices, value=choices[0][1] if choices else None), f"Found {len(logs)} trade logs."
@@ -890,7 +1056,9 @@ def create_auditable_interface():
                         else:
                             return None, "Invalid chart type."
                         
-                        info = f"Generated {chart_type.replace('_', ' ').title()} for {metadata.get('strategy', 'Unknown')} strategy"
+                        # Use memorable name in info
+                        display_name = metadata.get('display_name') or metadata.get('memorable_name', metadata.get('strategy', 'Unknown'))
+                        info = f"📊 {chart_type.replace('_', ' ').title()} | {display_name}"
                         return fig, info
                     except Exception as e:
                         return None, f"Error generating chart: {str(e)}"
@@ -950,10 +1118,26 @@ def create_auditable_interface():
                         load_context_btn = gr.Button("📥 Load Context", variant="secondary")
                         context_status = gr.Markdown("Context not loaded")
                         
-                        # Quick actions
-                        gr.Markdown("### ⚡ Quick Actions")
-                        analyze_current_btn = gr.Button("📊 Analyze Current Backtest", size="sm")
-                        suggest_improvements_btn = gr.Button("💡 Suggest Improvements", size="sm")
+                        # Simplified backtest analysis
+                        gr.Markdown("### 📊 Backtest Analysis")
+                        
+                        with gr.Row():
+                            backtest_dropdown = gr.Dropdown(
+                                label="Select Backtest",
+                                choices=[],
+                                value=None,
+                                info="Auto-selects most recent if none chosen",
+                                scale=3
+                            )
+                            refresh_backtests_btn = gr.Button("🔄", size="sm", scale=1)
+                        
+                        selected_backtest_info = gr.Markdown("Will analyze most recent backtest")
+                        
+                        # Analysis buttons
+                        analyze_btn = gr.Button("🎯 Analyze Backtest", variant="primary", size="lg")
+                        
+                        # Implementation expert button
+                        expert_btn = gr.Button("🔍 Launch Implementation Expert", variant="secondary", size="lg")
                         
                     with gr.Column(scale=2):
                         gr.Markdown("### 💬 AI Chat")
@@ -961,7 +1145,8 @@ def create_auditable_interface():
                         chatbot = gr.Chatbot(
                             height=500,
                             label="AI Trading Assistant",
-                            type="messages"
+                            type="messages",
+                            value=[]
                         )
                         
                         msg_input = gr.Textbox(
@@ -1010,18 +1195,48 @@ def create_auditable_interface():
                     else:
                         return "❌ Failed to Configure API", ai_assistant
                 
-                def load_ai_context(context_type, ai_assistant):
-                    """Load context for AI"""
+                def load_ai_context(context_type, ai_assistant, selected_backtest, history):
+                    """Load context for AI with optional specific backtest"""
                     if not ai_assistant.is_configured():
-                        return "❌ Please configure API first"
+                        return "❌ Please configure API first", history
                     
-                    result = ai_assistant.load_context(context_type)
-                    return result
+                    # Ensure history is a list
+                    if history is None:
+                        history = []
+                    
+                    # Add loading message to chat
+                    context_msg = f"Load {context_type} context"
+                    if selected_backtest:
+                        context_msg += f" with specific backtest"
+                    history.append({"role": "user", "content": context_msg})
+                    history.append({"role": "assistant", "content": "Loading context data..."})
+                    
+                    # Pass selected backtest path if available
+                    result = ai_assistant.load_context(context_type, selected_backtest)
+                    
+                    # Update the last assistant message with the result
+                    if history and history[-1]["role"] == "assistant":
+                        if "successfully" in result:
+                            context_details = {
+                                "all": "trade logs, strategy configurations, and source code",
+                                "trades": "recent trade logs with performance metrics",
+                                "strategies": "strategy configurations and parameters", 
+                                "code": "source code structure and key functions"
+                            }
+                            history[-1]["content"] = f"✅ {result}\n\nI've loaded the {context_details.get(context_type, context_type)} into my context. I can now help you:\n\n• Analyze your trading performance and identify patterns\n• Suggest strategy improvements based on your results\n• Explain how different parts of the system work\n• Answer questions about specific trades or strategies\n\nWhat would you like to know?"
+                        else:
+                            history[-1]["content"] = f"❌ {result}"
+                    
+                    return result, history
                 
                 def chat_with_ai(message, history, ai_assistant, current_data):
                     """Chat with AI assistant"""
                     if not message:
                         return history
+                    
+                    # Ensure history is a list
+                    if history is None:
+                        history = []
                     
                     if not ai_assistant.is_configured():
                         history.append({"role": "user", "content": message})
@@ -1034,30 +1249,111 @@ def create_auditable_interface():
                     history.append({"role": "assistant", "content": response})
                     return history
                 
-                def analyze_current_backtest(ai_assistant, current_data):
-                    """Analyze current backtest results"""
-                    if not ai_assistant.is_configured():
-                        return [{"role": "system", "content": "❌ AI not configured. Please set API key."}]
-                    
-                    if not current_data or 'trades' not in current_data:
-                        return [{"role": "system", "content": "No backtest data available. Please run a backtest first."}]
-                    
-                    analysis = ai_assistant.analyze_trades(current_data['trades'])
-                    return [{"role": "user", "content": "Analyze Current Backtest"}, {"role": "assistant", "content": analysis}]
+                def refresh_backtest_list():
+                    """Refresh the list of available backtests"""
+                    choices = get_available_backtests()
+                    return gr.update(choices=choices)
                 
-                def suggest_improvements(ai_assistant, current_data):
-                    """Get improvement suggestions"""
+                def display_backtest_info(selected_path):
+                    """Display information about selected backtest"""
+                    if not selected_path:
+                        return "Will analyze most recent backtest"
+                    
+                    try:
+                        path = Path(selected_path)
+                        if path.exists():
+                            with open(path, 'r') as f:
+                                data = json.load(f)
+                            
+                            metadata = data.get('metadata', {})
+                            perf = metadata.get('total_return', 0)
+                            emoji = "🚀" if perf > 0.1 else "📈" if perf > 0 else "📉" if perf > -0.1 else "💥"
+                            
+                            info = f"**Selected:** {metadata.get('memorable_name', 'Unknown')} ({perf:.1%} {emoji})"
+                            return info
+                        else:
+                            return f"❌ File not found"
+                    except Exception as e:
+                        return f"❌ Error: {str(e)}"
+                
+                def analyze_current_backtest(ai_assistant, selected_backtest_path, history):
+                    """Generate comprehensive analysis report with automatic context loading"""
+                    # Ensure history is a list
+                    if history is None:
+                        history = []
+                        
                     if not ai_assistant.is_configured():
-                        return [{"role": "system", "content": "❌ AI not configured. Please set API key."}]
+                        history.append({"role": "system", "content": "❌ AI not configured. Please set API key."})
+                        return history
                     
-                    strategy_type = "options trading"
-                    market_conditions = "variable volatility"
+                    # If no backtest selected, use most recent
+                    if not selected_backtest_path:
+                        recent_path, recent_info = get_most_recent_backtest()
+                        if recent_path:
+                            selected_backtest_path = recent_path
+                            history.append({"role": "system", "content": f"📊 Auto-selected most recent backtest: {recent_info.get('memorable_name', 'Unknown')}"})
+                        else:
+                            history.append({"role": "system", "content": "No backtest data available. Please run a backtest first."})
+                            return history
                     
-                    if current_data and 'strategy_name' in current_data:
-                        strategy_type = current_data['strategy_name']
-                    
-                    suggestions = ai_assistant.get_suggestions(strategy_type, market_conditions)
-                    return [{"role": "user", "content": "Suggest Improvements"}, {"role": "assistant", "content": suggestions}]
+                    # Load the selected backtest data
+                    try:
+                        with open(selected_backtest_path, 'r') as f:
+                            full_data = json.load(f)
+                        
+                        metadata = full_data.get('metadata', {})
+                        trades = full_data.get('trades', [])
+                        
+                        # Don't load full context - we'll pass the specific data directly
+                        history.append({"role": "system", "content": f"🔄 Loading backtest: {metadata.get('memorable_name', 'Unknown')}"})
+                        
+                        # Get strategy config and implementation metrics
+                        strategy_config = metadata.get('strategy_config')
+                        implementation_metrics = metadata.get('implementation_metrics', {})
+                        
+                        # Prepare backtest info for AI
+                        backtest_info = {
+                            'memorable_name': metadata.get('memorable_name', 'Unknown'),
+                            'display_name': metadata.get('display_name', 'N/A'),
+                            'strategy_name': metadata.get('strategy', 'Unknown'),
+                            'start_date': metadata.get('start_date', 'N/A'),
+                            'end_date': metadata.get('end_date', 'N/A'),
+                            'csv_path': str(Path(selected_backtest_path).with_suffix('.csv')),
+                            'json_path': str(selected_backtest_path),
+                            'total_return': metadata.get('total_return', 0),
+                            'initial_capital': metadata.get('initial_capital', 10000),
+                            'final_value': metadata.get('final_value', 0)
+                        }
+                        
+                        # Load strategy YAML for display
+                        strategy_yaml = None
+                        if strategy_config:
+                            strategy_yaml = yaml.dump(strategy_config, default_flow_style=False, sort_keys=False)
+                        
+                        # Prepare comprehensive data for AI
+                        comprehensive_data = {
+                            'trades': trades,
+                            'metadata': metadata,
+                            'strategy_config': strategy_config,
+                            'implementation_metrics': implementation_metrics,
+                            'backtest_info': backtest_info,
+                            'strategy_yaml': strategy_yaml
+                        }
+                        
+                        history.append({"role": "user", "content": "Generate a comprehensive analysis report for the loaded backtest"})
+                        analysis = ai_assistant.analyze_trades(
+                            comprehensive_data['trades'], 
+                            strategy_config, 
+                            implementation_metrics, 
+                            backtest_info,
+                            strategy_yaml
+                        )
+                        history.append({"role": "assistant", "content": analysis})
+                        return history
+                        
+                    except Exception as e:
+                        history.append({"role": "system", "content": f"❌ Error loading backtest: {str(e)}"})
+                        return history
                 
                 # Wire up AI handlers
                 app.load(
@@ -1074,8 +1370,8 @@ def create_auditable_interface():
                 
                 load_context_btn.click(
                     fn=load_ai_context,
-                    inputs=[context_type, ai_assistant],
-                    outputs=[context_status]
+                    inputs=[context_type, ai_assistant, backtest_dropdown, chatbot],
+                    outputs=[context_status, chatbot]
                 )
                 
                 send_btn.click(
@@ -1092,16 +1388,60 @@ def create_auditable_interface():
                     outputs=[chatbot]
                 )
                 
-                analyze_current_btn.click(
+                analyze_btn.click(
                     fn=analyze_current_backtest,
-                    inputs=[ai_assistant, current_backtest_data],
+                    inputs=[ai_assistant, backtest_dropdown, chatbot],
                     outputs=[chatbot]
                 )
                 
-                suggest_improvements_btn.click(
-                    fn=suggest_improvements,
-                    inputs=[ai_assistant, current_backtest_data],
-                    outputs=[chatbot]
+                # Backtest selection handlers
+                refresh_backtests_btn.click(
+                    fn=refresh_backtest_list,
+                    outputs=[backtest_dropdown]
+                )
+                
+                backtest_dropdown.change(
+                    fn=display_backtest_info,
+                    inputs=[backtest_dropdown],
+                    outputs=[selected_backtest_info]
+                )
+                
+                # Expert button handler
+                def launch_expert(selected_backtest):
+                    """Launch the implementation expert in a subprocess"""
+                    if not selected_backtest:
+                        return "Please select a backtest first"
+                    
+                    try:
+                        # Launch expert in new terminal
+                        import subprocess
+                        import platform
+                        
+                        cmd = [sys.executable, "ai_implementation_expert.py", "--backtest", selected_backtest]
+                        
+                        if platform.system() == "Darwin":  # macOS
+                            subprocess.Popen(
+                                ["osascript", "-e", f'tell app "Terminal" to do script "cd {os.getcwd()} && {" ".join(cmd)}"']
+                            )
+                        elif platform.system() == "Windows":
+                            subprocess.Popen(["start", "cmd", "/k"] + cmd, shell=True)
+                        else:  # Linux
+                            subprocess.Popen(["gnome-terminal", "--"] + cmd)
+                        
+                        return "✅ Implementation Expert launched in new terminal"
+                    except Exception as e:
+                        return f"❌ Error launching expert: {str(e)}"
+                
+                expert_btn.click(
+                    fn=launch_expert,
+                    inputs=[backtest_dropdown],
+                    outputs=[selected_backtest_info]
+                )
+                
+                # Load available backtests on startup
+                app.load(
+                    fn=refresh_backtest_list,
+                    outputs=[backtest_dropdown]
                 )
         
         # Event handlers
@@ -1129,8 +1469,16 @@ def create_auditable_interface():
                             'total_return': full_data['metadata'].get('total_return', 0),
                             'initial_capital': initial_capital,
                             'strategy_name': Path(strategy_file).stem,
+                            'strategy_config': full_data['metadata'].get('strategy_config'),
+                            'implementation_metrics': full_data['metadata'].get('implementation_metrics', {}),
+                            'memorable_name': full_data['metadata'].get('memorable_name'),
+                            'display_name': full_data['metadata'].get('display_name'),
                             'start_date': start_date,
-                            'end_date': end_date
+                            'end_date': end_date,
+                            'csv_path': str(csv_file),
+                            'json_path': str(json_file),
+                            'strategy_file': strategy_file,
+                            'data_source': data_file
                         }
                 else:
                     backtest_data = None

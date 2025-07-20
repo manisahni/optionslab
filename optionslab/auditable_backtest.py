@@ -14,6 +14,7 @@ import json
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.gridspec import GridSpec
+from typing import List, Dict, Optional, Tuple
 
 def load_and_audit_data(file_path):
     """Load parquet data and audit its contents"""
@@ -197,6 +198,16 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
     print(f"💰 AUDIT: Current underlying price: ${current_price:.2f}")
     print(f"📅 AUDIT: Current date: {current_date}")
     
+    # Track selection process for logging
+    selection_process = {
+        'total_options': 0,
+        'after_dte_filter': 0,
+        'after_delta_filter': 0,
+        'after_liquidity_filter': 0,
+        'criteria_relaxed': [],
+        'warnings': []
+    }
+    
     # Extract selection criteria from config
     selection_config = config.get('option_selection', {})
     method = selection_config.get('method', 'delta')
@@ -206,10 +217,16 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
     target_delta = delta_criteria.get('target', 0.30)
     delta_tolerance = delta_criteria.get('tolerance', 0.05)
     
+    print(f"🎯 AUDIT: Selection criteria:")
+    print(f"   - Target Delta: {target_delta} ± {delta_tolerance}")
+    print(f"   - Method: {method}")
+    
     dte_criteria = selection_config.get('dte_criteria', {})
     target_dte = dte_criteria.get('target', 45)
     min_dte = dte_criteria.get('minimum', 30)
     max_dte = dte_criteria.get('maximum', 60)
+    
+    print(f"   - Target DTE: {target_dte} (range: {min_dte}-{max_dte})")
     
     liquidity_criteria = selection_config.get('liquidity_criteria', {})
     min_volume = liquidity_criteria.get('min_volume', 100)
@@ -228,6 +245,7 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
         option_type_name = "call"
     
     options = data[data['right'] == option_right].copy()
+    selection_process['total_options'] = len(options)
     print(f"📊 AUDIT: Starting with {len(options)} {option_type_name} options")
     
     # Step 1: Calculate DTE and filter
@@ -235,6 +253,7 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
     options['dte'] = (options['expiration_date'] - pd.to_datetime(current_date)).dt.days
     
     dte_filtered = options[(options['dte'] >= min_dte) & (options['dte'] <= max_dte)].copy()
+    selection_process['after_dte_filter'] = len(dte_filtered)
     print(f"📅 AUDIT: After DTE filter ({min_dte}-{max_dte} days): {len(dte_filtered)} options")
     
     if dte_filtered.empty:
@@ -247,6 +266,7 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
             (dte_filtered['delta'] >= target_delta - delta_tolerance) &
             (dte_filtered['delta'] <= target_delta + delta_tolerance)
         ].copy()
+        selection_process['after_delta_filter'] = len(delta_filtered)
         print(f"🎯 AUDIT: After delta filter ({target_delta}±{delta_tolerance}): {len(delta_filtered)} options")
     else:
         # Fallback to strike-based selection
@@ -279,6 +299,7 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
         (delta_filtered['spread_pct'] <= max_spread_pct)
     ].copy()
     
+    selection_process['after_liquidity_filter'] = len(liquid_options)
     print(f"💧 AUDIT: After liquidity filter (vol>={min_volume}, spread<={max_spread_pct*100}%): {len(liquid_options)} options")
     
     # Step 4: If no options pass all filters, try relaxation
@@ -346,6 +367,9 @@ def find_suitable_options_advanced(data, current_price, config, current_date):
     print(f"   Spread: ${best_option['spread']:.2f} ({best_option['spread_pct']*100:.1f}%)")
     print(f"   Score: {best_option['total_score']:.3f}")
     
+    # Attach selection process to the option
+    best_option['selection_process'] = selection_process
+    
     return best_option
 
 
@@ -376,6 +400,118 @@ def calculate_position_size(cash, option_price, position_size_pct, max_contracts
     
     return contracts, actual_cost
 
+def create_implementation_metrics(trades: List[Dict], config: Dict) -> Dict:
+    """Create metrics to verify strategy implementation"""
+    if not trades:
+        return {'status': 'NO_TRADES', 'issues': ['No trades executed']}
+    
+    completed_trades = [t for t in trades if 'exit_date' in t]
+    if not completed_trades:
+        return {'status': 'NO_COMPLETED_TRADES', 'issues': ['No completed trades']}
+    
+    # Extract target parameters from config
+    entry_rules = config.get('entry_rules', {})
+    option_selection = config.get('option_selection', {})
+    delta_criteria = option_selection.get('delta_criteria', {})
+    dte_criteria = option_selection.get('dte_criteria', {})
+    
+    target_delta = delta_criteria.get('target', entry_rules.get('delta_target', 0.40))
+    delta_tolerance = delta_criteria.get('tolerance', 0.05)
+    target_dte = dte_criteria.get('target', entry_rules.get('dte', 30))
+    dte_min = dte_criteria.get('minimum', 25)
+    dte_max = dte_criteria.get('maximum', 35)
+    
+    # Analyze trades
+    metrics = {
+        'target_delta': target_delta,
+        'target_dte': target_dte,
+        'delta_tolerance': delta_tolerance,
+        'dte_range': [dte_min, dte_max],
+        'total_trades': len(completed_trades),
+        'issues': [],
+        'warnings': [],
+        'delta_analysis': {},
+        'dte_analysis': {},
+        'selection_process_summary': {},
+        'status': 'PASS'  # Will be updated based on analysis
+    }
+    
+    # Analyze delta compliance
+    deltas = [abs(t.get('entry_delta', 0)) for t in completed_trades if t.get('entry_delta') is not None]
+    if deltas:
+        metrics['delta_analysis'] = {
+            'mean': np.mean(deltas),
+            'std': np.std(deltas),
+            'min': min(deltas),
+            'max': max(deltas),
+            'within_tolerance': sum(1 for d in deltas if abs(d - target_delta) <= delta_tolerance),
+            'outside_tolerance': sum(1 for d in deltas if abs(d - target_delta) > delta_tolerance)
+        }
+        
+        # Check if deltas are systematically off target
+        if metrics['delta_analysis']['mean'] < target_delta - delta_tolerance:
+            metrics['issues'].append(f"Delta selection too low: mean {metrics['delta_analysis']['mean']:.3f} vs target {target_delta}")
+            metrics['status'] = 'FAIL'
+        elif metrics['delta_analysis']['mean'] > target_delta + delta_tolerance:
+            metrics['issues'].append(f"Delta selection too high: mean {metrics['delta_analysis']['mean']:.3f} vs target {target_delta}")
+            metrics['status'] = 'FAIL'
+    else:
+        metrics['issues'].append("No delta data available in trades")
+        metrics['status'] = 'FAIL'
+    
+    # Analyze DTE compliance
+    dtes = [t.get('dte_at_entry', 0) for t in completed_trades if t.get('dte_at_entry') is not None]
+    if dtes:
+        metrics['dte_analysis'] = {
+            'mean': np.mean(dtes),
+            'std': np.std(dtes),
+            'min': min(dtes),
+            'max': max(dtes),
+            'within_range': sum(1 for d in dtes if dte_min <= d <= dte_max),
+            'outside_range': sum(1 for d in dtes if d < dte_min or d > dte_max)
+        }
+        
+        # Check DTE compliance
+        if metrics['dte_analysis']['mean'] < dte_min:
+            metrics['issues'].append(f"DTE selection too short: mean {metrics['dte_analysis']['mean']:.1f} vs min {dte_min}")
+            metrics['status'] = 'FAIL'
+        elif metrics['dte_analysis']['mean'] > dte_max:
+            metrics['issues'].append(f"DTE selection too long: mean {metrics['dte_analysis']['mean']:.1f} vs max {dte_max}")
+            metrics['status'] = 'FAIL'
+    else:
+        metrics['issues'].append("No DTE data available in trades")
+        metrics['status'] = 'FAIL'
+    
+    # Analyze selection process data
+    selection_processes = [t.get('selection_process', {}) for t in completed_trades if t.get('selection_process')]
+    if selection_processes:
+        # Aggregate selection process data
+        total_options_sum = sum(sp.get('total_options', 0) for sp in selection_processes)
+        after_dte_sum = sum(sp.get('after_dte_filter', 0) for sp in selection_processes)
+        after_delta_sum = sum(sp.get('after_delta_filter', 0) for sp in selection_processes)
+        after_liquidity_sum = sum(sp.get('after_liquidity_filter', 0) for sp in selection_processes)
+        
+        metrics['selection_process_summary'] = {
+            'avg_total_options': total_options_sum / len(selection_processes) if selection_processes else 0,
+            'avg_after_dte': after_dte_sum / len(selection_processes) if selection_processes else 0,
+            'avg_after_delta': after_delta_sum / len(selection_processes) if selection_processes else 0,
+            'avg_after_liquidity': after_liquidity_sum / len(selection_processes) if selection_processes else 0,
+            'trades_with_relaxed_criteria': sum(1 for sp in selection_processes if sp.get('criteria_relaxed', []))
+        }
+        
+        # Check if criteria are being relaxed too often
+        relaxation_rate = metrics['selection_process_summary']['trades_with_relaxed_criteria'] / len(selection_processes)
+        if relaxation_rate > 0.5:
+            metrics['warnings'].append(f"High criteria relaxation rate: {relaxation_rate:.1%} of trades required relaxed criteria")
+    
+    # Add exit reason analysis
+    exit_reasons = [t.get('exit_reason', 'unknown') for t in completed_trades]
+    exit_reason_counts = pd.Series(exit_reasons).value_counts().to_dict()
+    metrics['exit_reason_distribution'] = exit_reason_counts
+    
+    return metrics
+
+
 def run_auditable_backtest(data_file, config_file, start_date, end_date):
     """Run a fully auditable backtest"""
     print("🚀 AUDIT: Starting auditable backtest")
@@ -390,11 +526,26 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
         print(f"📅 AUDIT: Multi-day backtest mode - loading data from {start_date} to {end_date}")
         data = load_multi_day_data(data_file, start_date, end_date)
     else:
-        # Single file backtest (legacy mode)
+        # Single file backtest
         print(f"📄 AUDIT: Single-file backtest mode")
         data = load_and_audit_data(data_file)
         
-    if data is None:
+        if data is not None:
+            # Filter to date range for single file
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+            
+            # Ensure date column is datetime
+            if data['date'].dtype == 'object':
+                data['date'] = pd.to_datetime(data['date'])
+            
+            # Filter to requested date range
+            print(f"🔍 AUDIT: Filtering {len(data)} rows to date range {start_date} to {end_date}...")
+            data = data[(data['date'] >= start_dt) & (data['date'] <= end_dt)]
+            print(f"✅ AUDIT: Filtered to {len(data)} rows in date range")
+        
+    if data is None or len(data) == 0:
+        print(f"❌ AUDIT: No data available for the specified date range")
         return None
     
     # Add strike_dollars column consistently
@@ -634,6 +785,19 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                 )
             
             if selected_option is not None:
+                # Verify selection criteria were met
+                if config.get('use_advanced_selection', False):
+                    delta_target = config.get('option_selection', {}).get('delta_criteria', {}).get('target', 0.40)
+                    dte_target = config.get('option_selection', {}).get('dte_criteria', {}).get('target', 30)
+                    actual_delta = abs(selected_option.get('delta', 0))
+                    actual_dte = selected_option.get('dte', 0)
+                    
+                    # Log any mismatches
+                    if abs(actual_delta - delta_target) > 0.05:
+                        print(f"⚠️  AUDIT: Delta mismatch - Target: {delta_target}, Actual: {actual_delta:.4f}")
+                    if abs(actual_dte - dte_target) > 5:
+                        print(f"⚠️  AUDIT: DTE mismatch - Target: {dte_target}, Actual: {actual_dte}")
+                
                 # Calculate position size
                 contracts, cost = calculate_position_size(
                     cash, 
@@ -680,7 +844,9 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                         'entry_rho': selected_option.get('rho', None),
                         'entry_iv': selected_option.get('implied_vol', None),
                         'entry_volume': selected_option.get('volume', None),
-                        'entry_open_interest': selected_option.get('open_interest', None)
+                        'entry_open_interest': selected_option.get('open_interest', None),
+                        # Add selection process details for AI analysis
+                        'selection_process': selected_option.get('selection_process', {})
                     }
                     trades.append(trade)
                     
@@ -1041,9 +1207,11 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                         trade['pnl_pct'] = (pnl / trade['cost']) * 100
                         trade['exit_reason'] = 'end_of_period'
                         trade['days_held'] = pos['days_held']
-                        trade['underlying_at_exit'] = current_underlying_price
-                        trade['underlying_move'] = current_underlying_price - trade['underlying_at_entry']
-                        trade['underlying_move_pct'] = ((current_underlying_price - trade['underlying_at_entry']) / trade['underlying_at_entry']) * 100
+                        # Get the underlying price from the exit option data
+                        underlying_at_exit = exit_option.get('underlying_price', trade.get('underlying_at_entry', 0))
+                        trade['underlying_at_exit'] = underlying_at_exit
+                        trade['underlying_move'] = underlying_at_exit - trade['underlying_at_entry']
+                        trade['underlying_move_pct'] = ((underlying_at_exit - trade['underlying_at_entry']) / trade['underlying_at_entry']) * 100
                         # Exit Greeks
                         trade['exit_delta'] = pos.get('current_delta', None)
                         trade['exit_gamma'] = pos.get('current_gamma', None)
@@ -1107,6 +1275,9 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
             pnl_pct = (trade['pnl'] / trade['cost']) * 100
             print(f"Trade {i}: Entry ${trade['option_price']:.2f} → Exit ${trade['exit_price']:.2f} → P&L ${trade['pnl']:.2f} ({pnl_pct:+.1f}%) | {exit_reason}")
     
+    # Create implementation metrics for AI analysis
+    implementation_metrics = create_implementation_metrics(trades, config)
+    
     # Prepare results dictionary
     results = {
         'final_value': final_value,
@@ -1119,7 +1290,8 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
         'sharpe_ratio': sharpe_ratio if 'sharpe_ratio' in locals() else None,
         'max_drawdown': max_drawdown if 'max_drawdown' in locals() else None,
         'start_date': start_date,
-        'end_date': end_date
+        'end_date': end_date,
+        'implementation_metrics': implementation_metrics
     }
     
     # Export results if requested
