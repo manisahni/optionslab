@@ -39,6 +39,30 @@
       "backtest_date": "2025-07-20T23:05:35.216154",
       "total_return": -0.1138,
       "total_trades": 4
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_100731.json",
+      "memorable_name": "Brave Condor-1007",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-21T10:07:31.115390",
+      "total_return": -0.1138,
+      "total_trades": 4
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_100950.json",
+      "memorable_name": "Silver Eagle-1009",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-21T10:09:50.612560",
+      "total_return": -0.1138,
+      "total_trades": 4
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_152745.json",
+      "memorable_name": "Clever Tiger-1527",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-21T15:27:45.825461",
+      "total_return": -0.1138,
+      "total_trades": 4
     }
   ],
   "last_updated": "2025-07-21T10:15:00.000000",

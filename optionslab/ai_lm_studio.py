@@ -8,6 +8,7 @@ import os
 import json
 import yaml
 import pandas as pd
+import re
 from typing import Dict, Optional, List
 from pathlib import Path
 from datetime import datetime
@@ -36,6 +37,7 @@ class LMStudioAssistant:
         self.client = None
         self.model = None
         self._initialized = False
+        self.timeout = 60  # 60 second timeout
         
     def initialize(self) -> bool:
         """Initialize connection to LM Studio"""
@@ -49,22 +51,13 @@ class LMStudioAssistant:
         try:
             self.client = OpenAI(
                 base_url=self.base_url,
-                api_key="not-needed"  # LM Studio doesn't require API key
+                api_key="not-needed",  # LM Studio doesn't require API key
+                timeout=self.timeout
             )
             
-            # Test connection and get model
-            try:
-                models = self.client.models.list()
-                if models.data:
-                    self.model = models.data[0].id
-                    print(f"Connected to LM Studio. Using model: {self.model}")
-                else:
-                    self.model = "local-model"  # Fallback
-                    print("Connected to LM Studio")
-            except:
-                # Some LM Studio versions don't support model listing
-                self.model = "local-model"
-                print("Connected to LM Studio")
+            # Use generic model name that LM Studio will route
+            self.model = "local-model"
+            print(f"Connected to LM Studio at {self.base_url}")
             
             self._initialized = True
             return True
@@ -103,21 +96,74 @@ class LMStudioAssistant:
             
             You have access to comprehensive trade data and strategy configurations."""
             
-            # Make the API call
+            print(f"[DEBUG] Sending chat request to LM Studio (timeout: {self.timeout}s)")
+            print(f"[DEBUG] Using model: {self.model}")
+            
+            # Prepare messages with reasonable context
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"{context[:2000]}\n\nUser Query: {message}"}  # Limit context
+            ]
+            
+            print(f"[DEBUG] Message length: system={len(system_prompt)}, user={len(messages[1]['content'])}")
+            
+            # Make the API call with explicit timeout
+            start_time = datetime.now()
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": context + "\n\nUser Query: " + message}
-                ],
+                messages=messages,
                 temperature=0.5,
-                max_tokens=4000
+                max_tokens=1000,  # Reduced for faster response
+                stream=False  # Explicitly disable streaming
             )
             
-            return response.choices[0].message.content
+            elapsed = (datetime.now() - start_time).total_seconds()
+            print(f"[DEBUG] LM Studio responded in {elapsed:.1f} seconds")
+            
+            # Extract and validate response
+            if not response or not response.choices:
+                return "❌ No response received from LM Studio"
+            
+            content = response.choices[0].message.content
+            if not content:
+                return "❌ Empty response from LM Studio"
+                
+            # Clean up response from DeepSeek model format
+            original_content = content
+            
+            # Handle <think> tags from DeepSeek models
+            if '<think>' in content:
+                # Try to extract content after </think>
+                if '</think>' in content:
+                    parts = content.split('</think>')
+                    # Get everything after the last </think>
+                    content = parts[-1].strip()
+                else:
+                    # No closing tag, probably still thinking
+                    # Return a message indicating processing
+                    return "🤔 The model is still processing. Please try with a simpler question or wait a moment."
+            
+            # Clean any remaining tags
+            content = re.sub(r'<[^>]+>', '', content).strip()
+            
+            # If we ended up with empty content, provide helpful response
+            if not content:
+                print(f"[DEBUG] Content was empty after cleaning. Original: {original_content[:200]}...")
+                return "I understand your question. Let me analyze the backtest data and provide insights.\n\n" + \
+                       "Based on the data available, I can help with:\n" + \
+                       "- Performance metrics analysis\n" + \
+                       "- Trade pattern identification\n" + \
+                       "- Strategy optimization suggestions\n\n" + \
+                       "Please ask a specific question about the backtest results."
+                
+            print(f"[DEBUG] Response length: {len(content)} characters")
+            return content
             
         except Exception as e:
-            return f"Error communicating with LM Studio: {str(e)}"
+            import traceback
+            print(f"[ERROR] LM Studio chat error: {str(e)}")
+            traceback.print_exc()
+            return f"❌ Error communicating with LM Studio: {str(e)}\n\nPlease check:\n1. LM Studio is running\n2. A model is loaded\n3. The model is responding to requests"
     
     def _build_context(self, backtest_data: Optional[Dict]) -> str:
         """Build comprehensive context from backtest data"""

@@ -823,6 +823,8 @@ What would you like to explore?"""
         
         def chat_with_ai(message, chat_history, backtest_data):
             """Handle chat messages and maintain conversation"""
+            print(f"[DEBUG] Chat request received: {message[:50]}...")
+            
             if not ai_assistant.is_configured():
                 chat_history.append({"role": "user", "content": message})
                 chat_history.append({"role": "assistant", "content": "❌ LM Studio not connected. Please check connection."})
@@ -836,12 +838,44 @@ What would you like to explore?"""
             # Add user message to history
             chat_history.append({"role": "user", "content": message})
             
-            # Let the LLM handle all queries naturally
-            response = ai_assistant.chat(message, backtest_data)
+            try:
+                print("[DEBUG] Sending request to LM Studio...")
+                
+                # Add a processing message
+                processing_msg = {"role": "assistant", "content": "🤔 Processing your request..."}
+                chat_history.append(processing_msg)
+                
+                # Let the LLM handle all queries naturally
+                response = ai_assistant.chat(message, backtest_data)
+                
+                print(f"[DEBUG] Response received: {type(response)}, length: {len(str(response)) if response else 0}")
+                print(f"[DEBUG] Response preview: {str(response)[:200] if response else 'None'}...")
+                
+                # Validate response
+                if response is None:
+                    response = "❌ No response received from LM Studio. Please check if the model is loaded."
+                elif not isinstance(response, str):
+                    response = str(response)
+                elif response.strip() == "":
+                    response = "❌ Empty response received. Please try again."
+                
+                # Remove processing message and add actual response
+                chat_history = chat_history[:-1]  # Remove processing message
+                chat_history.append({"role": "assistant", "content": response})
+                
+            except Exception as e:
+                print(f"[ERROR] Exception in chat_with_ai: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                
+                # Remove processing message if it exists
+                if chat_history and chat_history[-1]["content"] == "🤔 Processing your request...":
+                    chat_history = chat_history[:-1]
+                
+                error_msg = f"❌ Error: {str(e)}\n\nPlease check:\n1. LM Studio is running\n2. A model is loaded\n3. The model is responding"
+                chat_history.append({"role": "assistant", "content": error_msg})
             
-            # Add AI response to history
-            chat_history.append({"role": "assistant", "content": response})
-            
+            print(f"[DEBUG] Returning {len(chat_history)} messages")
             # Return updated history and clear input
             return chat_history, ""
         
