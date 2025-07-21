@@ -19,7 +19,7 @@ import random
 from typing import List, Dict, Optional, Tuple
 
 # Import our auditable backtest functions
-from auditable_backtest import (
+from optionslab.auditable_backtest import (
     load_and_audit_data,
     audit_strategy_config,
     find_suitable_options,
@@ -28,7 +28,7 @@ from auditable_backtest import (
 )
 
 # Import visualization and AI modules
-from visualization import (
+from optionslab.visualization import (
     plot_pnl_curve,
     plot_trade_markers,
     plot_greeks_evolution,
@@ -36,7 +36,7 @@ from visualization import (
     plot_strategy_heatmap,
     create_summary_dashboard
 )
-from ai_assistant import AIAssistant
+from optionslab.ai_assistant import AIAssistant
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -49,7 +49,7 @@ def get_trade_logs_dir() -> Path:
 def get_available_data_files():
     """Get available parquet files for backtesting"""
     # Use local data directory
-    data_dir = Path("data")
+    data_dir = Path(__file__).parent / "data"
     
     files = []
     
@@ -72,17 +72,17 @@ def get_available_strategies():
     strategies = []
     
     # Check parent directory for simple strategies
-    simple_strategy = Path("../simple_test_strategy.yaml")
+    simple_strategy = Path(__file__).parent.parent / "simple_test_strategy.yaml"
     if simple_strategy.exists():
         strategies.append(("🎯 Simple Long Call Test", str(simple_strategy)))
     
     # Check for advanced strategy
-    advanced_strategy = Path("../advanced_test_strategy.yaml")
+    advanced_strategy = Path(__file__).parent.parent / "advanced_test_strategy.yaml"
     if advanced_strategy.exists():
         strategies.append(("🚀 Advanced Long Call (Delta/DTE/Liquidity)", str(advanced_strategy)))
     
     # Check config/strategies directory
-    strategies_dir = Path("../config/strategies")
+    strategies_dir = Path(__file__).parent.parent / "config" / "strategies"
     if strategies_dir.exists():
         for yaml_file in strategies_dir.glob("*.yaml"):
             name = yaml_file.stem.replace('_', ' ').title()
@@ -714,20 +714,27 @@ def create_simple_interface():
                 return [{"role": "assistant", "content": "❌ No backtest selected. Please select a backtest from the dropdown above."}]
             
             metadata = backtest_data.get('metadata', {})
-            greeting = f"""👋 Hello! I'm your AI Assistant for OptionsLab.
+            greeting = f"""👋 I'm a professional financial trader and quantitative developer with expertise in options trading strategies.
 
-I'm analyzing the backtest: **{metadata.get('memorable_name', 'Unknown')}**
+I've reviewed the backtest: **{metadata.get('memorable_name', 'Unknown')}**
 - Total Return: {metadata.get('total_return', 0):.1%}
 - Total Trades: {metadata.get('total_trades', 0)}
 - Win Rate: {metadata.get('win_rate', 0):.1%}
 
-How can I help you? Here are some things I can do:
-1. 📊 **Analyze the trading performance** - I'll review the trades and provide insights
-2. 🔍 **Check implementation quality** - I'll verify if the strategy was implemented correctly
-3. 💡 **Suggest improvements** - I can recommend optimizations based on the results
-4. ❓ **Answer questions** - Ask me anything about this backtest
+I have access to:
+- Complete trade execution logs and performance metrics
+- Strategy configuration and parameters
+- The backtesting engine source code
+- Historical Greeks and underlying price data
 
-What would you like to explore?"""
+As an experienced trader and coder, I can help you with:
+1. 📊 **Performance Analysis** - Deep dive into trade metrics and risk-adjusted returns
+2. 🔍 **Implementation Verification** - Ensure the strategy logic matches specifications
+3. 💡 **Strategy Optimization** - Recommend parameter adjustments based on market regime
+4. 🛠️ **Code Review** - Analyze the implementation quality and suggest improvements
+5. 📈 **Risk Management** - Evaluate position sizing and drawdown control
+
+What aspect would you like to explore?"""
             
             return [{"role": "assistant", "content": greeting}]
         

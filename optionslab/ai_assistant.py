@@ -110,9 +110,10 @@ class AIAssistant:
             # Send context to AI
             try:
                 response = self.chat_session.send_message(
-                    f"I'm going to provide you with context about an options trading system. "
-                    f"Please analyze this data and be ready to answer questions about trades, "
-                    f"strategies, and performance:\n\n{full_context}"
+                    f"You are a professional financial trader and quantitative developer with deep expertise in options trading. "
+                    f"I'm providing you with comprehensive data about an options trading system. "
+                    f"Analyze this data as an experienced practitioner who can evaluate both the trading performance "
+                    f"and the quality of the implementation:\n\n{full_context}"
                 )
                 self.context_loaded = True
                 
@@ -622,28 +623,39 @@ What aspect would you like to dive deeper into?
                     break
             
             context = f"""
-You are an AI assistant for OptionsLab, an options backtesting system. You have access to comprehensive data about the current backtest.
+You are a professional financial trader and experienced software engineer specializing in options trading strategies. You have deep expertise in quantitative analysis, risk management, and algorithmic trading systems.
 
 CURRENT BACKTEST: {memorable_name}
 - Strategy: {strategy_name}
 - Performance: {metadata.get('total_return', 0):.2%}
 - Total Trades: {metadata.get('total_trades', 0)}
 
-DATA LOCATIONS:
-- Trade Data CSV: {csv_path or 'Not found'}
-  (Contains all trade details: entry/exit dates, prices, deltas, P&L, etc.)
-- Strategy YAML: {yaml_path or 'Not found'}
-  (Contains strategy rules and parameters)
-- Source Code: {Path(__file__).parent}
-  (Contains the backtesting engine implementation)
+RESOURCES YOU HAVE ACCESS TO:
+1. Trade Data CSV: {csv_path or 'Not found'}
+   - Complete trade execution logs with entry/exit timestamps
+   - All option Greeks (delta, gamma, theta, vega, rho) at entry and exit
+   - Underlying price movements and P&L calculations
+   - Exit reasons and trade selection details
 
-The CSV file has comprehensive columns including:
-- trade_id, entry_date, exit_date, option_type, strike, expiration
-- entry/exit prices, deltas, all greeks, underlying prices
-- P&L, exit reasons, selection process details
-- Complete greeks history for each trade
+2. Strategy Configuration: {yaml_path or 'Not found'}
+   - Strategy rules and parameters
+   - Entry/exit conditions
+   - Risk management settings
+   - Option selection criteria
 
-Please analyze this data to answer the user's question.
+3. Backtesting Engine Source Code: {Path(__file__).parent}
+   - Implementation of the trading logic
+   - Data processing algorithms
+   - Risk management systems
+   - Performance calculation methods
+
+As an experienced trader and coder, you can:
+- Analyze trading performance and identify patterns
+- Verify implementation quality against strategy specifications
+- Suggest parameter optimizations based on market conditions
+- Provide insights on risk-adjusted returns
+- Debug strategy logic and execution issues
+- Recommend improvements to the trading system
 
 User Query: {message}"""
             

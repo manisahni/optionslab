@@ -6,9 +6,33 @@
       "strategy": "simple-test-strategy",
       "backtest_date": "2025-07-20T20:34:51.585461",
       "total_return": -0.1138,
+      "total_trades": 4,
+      "start_date": "2022-01-01",
+      "end_date": "2022-12-31",
+      "win_rate": 0.0,
+      "json_path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250720_203451.json"
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250720_143939.json",
+      "memorable_name": "Swift Orca-1439",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-20T14:39:39.564432",
+      "total_return": -0.1138,
+      "total_trades": 4,
+      "start_date": "2022-01-01",
+      "end_date": "2022-12-31",
+      "win_rate": 0.0,
+      "json_path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250720_143939.json"
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250720_221341.json",
+      "memorable_name": "Calm Eagle-2213",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-20T22:13:41.460380",
+      "total_return": -0.1138,
       "total_trades": 4
     }
   ],
-  "last_updated": "2025-07-20T14:10:43.711976",
+  "last_updated": "2025-07-21T10:15:00.000000",
   "version": "1.0"
 }
