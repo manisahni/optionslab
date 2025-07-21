@@ -37,7 +37,7 @@ from optionslab.visualization import (
     plot_strategy_heatmap,
     create_summary_dashboard
 )
-from optionslab.ai_assistant import AIAssistant
+from optionslab.ai_assistant_multi import MultiProviderAIAssistant
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -538,18 +538,32 @@ def create_simple_interface():
             
             # AI Assistant Tab
             with gr.TabItem("🤖 AI Assistant", id=2):
-                ai_assistant = gr.State(AIAssistant())
+                ai_assistant = gr.State(MultiProviderAIAssistant())
                 
                 with gr.Row():
                     with gr.Column(scale=1):
                         gr.Markdown("### 🔧 AI Configuration")
-                        api_key_input = gr.Textbox(
-                            type="password",
-                            label="Gemini API Key",
-                            placeholder="Enter or use .env"
+                        
+                        # Provider selection
+                        ai_provider = gr.Dropdown(
+                            choices=["openai", "lm_studio", "gemini", "ollama_agent"],
+                            value="lm_studio",
+                            label="AI Provider",
+                            info="Select AI provider for analysis"
                         )
-                        save_key_btn = gr.Button("💾 Update Key", size="sm")
-                        api_status = gr.Markdown("Checking...")
+                        
+                        provider_status = gr.Markdown("Provider: LM Studio (Local)")
+                        
+                        # API key input (only shown for Gemini)
+                        with gr.Group(visible=False) as gemini_config:
+                            api_key_input = gr.Textbox(
+                                type="password",
+                                label="Gemini API Key",
+                                placeholder="Enter or use .env"
+                            )
+                            save_key_btn = gr.Button("💾 Update Key", size="sm")
+                        
+                        api_status = gr.Markdown("")
                         
                         start_chat_btn = gr.Button("🤖 Start AI Assistant", variant="primary", size="lg")
                         
@@ -720,6 +734,37 @@ def create_simple_interface():
             outputs=[main_chart]
         )
         
+        # Provider switching
+        def switch_provider(provider, ai):
+            """Switch AI provider and update UI"""
+            success = ai.set_provider(provider)
+            
+            if provider == "openai":
+                status_msg = "Provider: OpenAI Assistant API with Code Interpreter"
+                show_gemini = False
+            elif provider == "lm_studio":
+                status_msg = "Provider: LM Studio (Local) - Make sure LM Studio is running"
+                show_gemini = False
+            elif provider == "ollama_agent":
+                status_msg = "Provider: Ollama Agent (Mixtral) - Advanced analysis with LangChain tools"
+                show_gemini = False
+            else:  # gemini
+                status_msg = "Provider: Google Gemini"
+                show_gemini = True
+            
+            if not success:
+                status_msg += " ⚠️ Failed to initialize"
+            else:
+                status_msg += " ✅"
+                
+            return status_msg, gr.update(visible=show_gemini), ai
+        
+        ai_provider.change(
+            fn=switch_provider,
+            inputs=[ai_provider, ai_assistant],
+            outputs=[provider_status, gemini_config, ai_assistant]
+        )
+        
         save_key_btn.click(
             fn=lambda key, ai: ("✅ Key saved", ai.set_api_key(key) or ai),
             inputs=[api_key_input, ai_assistant],
@@ -742,11 +787,11 @@ I've reviewed the backtest: **{metadata.get('memorable_name', 'Unknown')}**
 - Total Trades: {metadata.get('total_trades', 0)}
 - Win Rate: {metadata.get('win_rate', 0):.1%}
 
-I have access to:
-- Complete trade execution logs and performance metrics
-- Strategy configuration and parameters
-- The backtesting engine source code
-- Historical Greeks and underlying price data
+I've been provided with:
+- Complete trade data for all {metadata.get('total_trades', 0)} trades
+- Full strategy configuration and parameters
+- Performance metrics and statistics
+- Trade-by-trade details including Greeks, P&L, and exit reasons
 
 As an experienced trader and coder, I can help you with:
 1. 📊 **Performance Analysis** - Deep dive into trade metrics and risk-adjusted returns
@@ -754,6 +799,7 @@ As an experienced trader and coder, I can help you with:
 3. 💡 **Strategy Optimization** - Recommend parameter adjustments based on market regime
 4. 🛠️ **Code Review** - Analyze the implementation quality and suggest improvements
 5. 📈 **Risk Management** - Evaluate position sizing and drawdown control
+6. 📑 **Comprehensive Report** - Generate full analysis report (best with Ollama Agent)
 
 What aspect would you like to explore?"""
             
@@ -796,6 +842,10 @@ Provide insights and suggestions."""
             elif any(word in message_lower for word in ["improve", "optimize", "suggestion", "3"]):
                 # Provide improvement suggestions
                 response = ai_assistant.chat("Based on this backtest data, what specific improvements would you recommend for better performance?", backtest_data)
+                
+            elif any(word in message_lower for word in ["report", "comprehensive", "full analysis"]):
+                # Generate comprehensive report (especially useful with Ollama agent)
+                response = ai_assistant.generate_analysis_report(backtest_data)
                 
             else:
                 # General chat

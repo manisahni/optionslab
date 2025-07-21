@@ -6,6 +6,7 @@ Provides intelligent analysis of trades and strategies using Google Gemini
 
 import os
 import json
+import yaml
 import google.generativeai as genai
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
@@ -632,6 +633,31 @@ What aspect would you like to dive deeper into?
                     yaml_path = str(path)
                     break
             
+            # Load strategy YAML content if available
+            strategy_config_text = ""
+            if yaml_path and Path(yaml_path).exists():
+                try:
+                    with open(yaml_path, 'r') as f:
+                        strategy_config = yaml.safe_load(f)
+                    strategy_config_text = f"\n\nSTRATEGY CONFIGURATION:\n{yaml.dump(strategy_config, default_flow_style=False)}"
+                except Exception as e:
+                    strategy_config_text = f"\n\nError loading strategy config: {str(e)}"
+            
+            # Get trade summary
+            trades = current_data.get('trades', [])
+            trade_summary = f"\n\nTRADE DATA SUMMARY:\n"
+            trade_summary += f"Total trades in dataset: {len(trades)}\n"
+            if trades:
+                trade_summary += f"First trade: {trades[0].get('entry_date', 'N/A')}\n"
+                trade_summary += f"Last trade: {trades[-1].get('entry_date', 'N/A')}\n"
+                trade_summary += "\nSample of first 3 trades:\n"
+                for i, trade in enumerate(trades[:3]):
+                    trade_summary += f"\nTrade {i+1}:\n"
+                    trade_summary += f"  - Entry: {trade.get('entry_date')} at ${trade.get('entry_price', 0):.2f}\n"
+                    trade_summary += f"  - Exit: {trade.get('exit_date')} at ${trade.get('exit_price', 0):.2f}\n"
+                    trade_summary += f"  - P&L: ${trade.get('pnl_dollar', 0):.2f} ({trade.get('pnl_percent', 0):.1f}%)\n"
+                    trade_summary += f"  - Exit reason: {trade.get('exit_reason', 'N/A')}\n"
+            
             context = f"""
 You are a professional financial trader and experienced software engineer specializing in options trading strategies. You have deep expertise in quantitative analysis, risk management, and algorithmic trading systems.
 
@@ -639,41 +665,32 @@ CURRENT BACKTEST: {memorable_name}
 - Strategy: {strategy_name}
 - Performance: {metadata.get('total_return', 0):.2%}
 - Total Trades: {metadata.get('total_trades', 0)}
+- Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
 
-RESOURCES YOU HAVE ACCESS TO:
-1. Trade Data CSV: {csv_path or 'Not found'}
-   - Complete trade execution logs with entry/exit timestamps
-   - All option Greeks (delta, gamma, theta, vega, rho) at entry and exit
-   - Underlying price movements and P&L calculations
-   - Exit reasons and trade selection details
+DATA AVAILABLE TO YOU:
+1. Complete trade data is provided in the current_data parameter with {len(trades)} trades
+2. Each trade includes: entry/exit dates, prices, Greeks, P&L, exit reasons
+3. Strategy configuration details are included below
+4. Performance metrics are in the metadata
 
-2. Strategy Configuration: {yaml_path or 'Not found'}
-   - Strategy rules and parameters
-   - Entry/exit conditions
-   - Risk management settings
-   - Option selection criteria
+FILE LOCATIONS (for reference):
+- Trade Data CSV: {csv_path or 'Not found'}
+- Strategy YAML: {yaml_path or 'Not found'}
+- Performance Plot: {plot_path or 'Not found'}
+{strategy_config_text}
+{trade_summary}
 
-3. Performance Dashboard Plot: {plot_path or 'Not found'}
-   - Visual representation of P&L curve
-   - Trade markers and performance metrics
-   - Drawdown visualization
-   - Summary statistics
-   {f"(I can see this plot image and analyze it visually)" if plot_path and Path(plot_path).exists() else "(Plot not available for this backtest)"}
-
-4. Backtesting Engine Source Code: {Path(__file__).parent}
-   - Implementation of the trading logic
-   - Data processing algorithms
-   - Risk management systems
-   - Performance calculation methods
+IMPORTANT: All the trade data you need for analysis is already provided in the current_data structure. You have:
+- current_data['trades']: List of all {len(trades)} trades with complete details
+- current_data['metadata']: Performance metrics and backtest information
 
 As an experienced trader and coder, you can:
-- Analyze trading performance and identify patterns
-- Verify implementation quality against strategy specifications
-- Suggest parameter optimizations based on market conditions
-- Provide insights on risk-adjusted returns
-- Debug strategy logic and execution issues
-- Recommend improvements to the trading system
-- Analyze visual performance charts when available
+- Analyze the actual trade executions against the strategy specifications
+- Verify if the implementation correctly followed the strategy rules
+- Identify patterns in winning vs losing trades
+- Suggest parameter optimizations based on the results
+- Evaluate risk management effectiveness
+- Provide specific, actionable recommendations
 
 User Query: {message}"""
             
