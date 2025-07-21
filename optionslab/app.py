@@ -905,10 +905,12 @@ Provide insights and suggestions."""
 # ============================================================================
 
 if __name__ == "__main__":
+    import os
+    port = int(os.getenv("GRADIO_SERVER_PORT", "7862"))
     app = create_simple_interface()
     app.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=port,
         share=False,
         show_error=True,
         inbrowser=False
