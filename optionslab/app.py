@@ -546,7 +546,7 @@ def create_simple_interface():
                         
                         # Provider selection
                         ai_provider = gr.Dropdown(
-                            choices=["openai", "lm_studio", "gemini", "ollama_agent"],
+                            choices=["openai", "lm_studio", "gemini"],
                             value="lm_studio",
                             label="AI Provider",
                             info="Select AI provider for analysis"
@@ -743,10 +743,7 @@ def create_simple_interface():
                 status_msg = "Provider: OpenAI Assistant API with Code Interpreter"
                 show_gemini = False
             elif provider == "lm_studio":
-                status_msg = "Provider: LM Studio (Local) - Make sure LM Studio is running"
-                show_gemini = False
-            elif provider == "ollama_agent":
-                status_msg = "Provider: Ollama Agent (Mixtral) - Advanced analysis with LangChain tools"
+                status_msg = "Provider: LM Studio (Local) - Smart Analysis Mode Enabled ✨"
                 show_gemini = False
             else:  # gemini
                 status_msg = "Provider: Google Gemini"
@@ -794,12 +791,14 @@ I've been provided with:
 - Trade-by-trade details including Greeks, P&L, and exit reasons
 
 As an experienced trader and coder, I can help you with:
-1. 📊 **Performance Analysis** - Deep dive into trade metrics and risk-adjusted returns
-2. 🔍 **Implementation Verification** - Ensure the strategy logic matches specifications
-3. 💡 **Strategy Optimization** - Recommend parameter adjustments based on market regime
-4. 🛠️ **Code Review** - Analyze the implementation quality and suggest improvements
-5. 📈 **Risk Management** - Evaluate position sizing and drawdown control
-6. 📑 **Comprehensive Report** - Generate full analysis report (best with Ollama Agent)
+1. 📊 **Performance Analysis** - Calculate Sharpe, Sortino, and risk metrics
+2. 🔍 **Losing Pattern Analysis** - Find common patterns in losing trades
+3. 💡 **Parameter Optimization** - Suggest optimal delta, DTE, and exit strategies
+4. 📈 **Market Regime Analysis** - Performance across different market conditions
+5. ✅ **Strategy Adherence** - Validate trades against strategy rules
+6. 📑 **Comprehensive Report** - Generate full analysis report
+
+💡 **Smart Analysis Mode**: Just ask naturally - I'll automatically use specialized tools for analysis keywords like "risk metrics", "losing patterns", "optimize", etc.
 
 What aspect would you like to explore?"""
             

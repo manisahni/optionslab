@@ -28,11 +28,15 @@ except ImportError:
     genai = None
     Image = None
 
+# Standard imports at module level
+import pandas as pd
+import yaml
+
 # Import agentic analysis if available
 try:
-    from .agentic_analysis import OllamaAgentProvider, create_analysis_report
+    from .agentic_analysis import TradeAnalysisTools, create_analysis_report
 except ImportError:
-    OllamaAgentProvider = None
+    TradeAnalysisTools = None
     create_analysis_report = None
 
 
@@ -243,26 +247,97 @@ class LMStudioProvider(BaseAIProvider):
     
     def chat(self, message: str, trade_data: Optional[Dict] = None, 
              csv_path: Optional[str] = None, yaml_path: Optional[str] = None) -> str:
-        """Chat with LM Studio"""
+        """Chat with LM Studio with smart routing for analysis"""
         if not self.is_configured():
             return "LM Studio not configured. Make sure LM Studio is running."
         
         try:
-            # Build context with data summaries (LM Studio can't upload files)
-            context = self._build_context(trade_data, csv_path, yaml_path)
+            # Check if this is an analysis request
+            message_lower = message.lower()
+            is_analysis = any(word in message_lower for word in [
+                'analyze', 'analysis', 'report', 'risk', 'metrics', 'sharpe', 'sortino',
+                'losing', 'pattern', 'optimal', 'parameter', 'adherence', 'validate',
+                'market regime', 'comprehensive', 'deep dive'
+            ])
             
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are an expert options trader and quantitative analyst specializing in backtesting analysis. Focus on providing specific, actionable insights."},
-                    {"role": "user", "content": context + "\n\nUser Query: " + message}
-                ],
-                temperature=0.7,
-                max_tokens=4000  # Increased for more detailed responses
-            )
+            if is_analysis and TradeAnalysisTools and csv_path and Path(csv_path).exists():
+                # Load data for analysis
+                trades_df = pd.read_csv(csv_path)
+                
+                # Route to specific analysis tool
+                if any(word in message_lower for word in ['losing', 'loss', 'pattern']):
+                    return self._format_analysis_response(
+                        "Losing Pattern Analysis",
+                        TradeAnalysisTools.find_losing_patterns(trades_df)
+                    )
+                
+                elif any(word in message_lower for word in ['risk', 'sharpe', 'sortino', 'drawdown', 'metrics']):
+                    initial_capital = trade_data.get('metadata', {}).get('initial_capital', 10000) if trade_data else 10000
+                    return self._format_analysis_response(
+                        "Risk Metrics Analysis", 
+                        TradeAnalysisTools.calculate_risk_metrics(trades_df, initial_capital)
+                    )
+                
+                elif any(word in message_lower for word in ['adherence', 'validate', 'rules', 'violation']):
+                    strategy_config = self._load_strategy_config(yaml_path, trade_data)
+                    return self._format_analysis_response(
+                        "Strategy Adherence Check",
+                        TradeAnalysisTools.validate_strategy_adherence(trades_df, strategy_config)
+                    )
+                
+                elif any(word in message_lower for word in ['optimize', 'optimal', 'parameter', 'improve']):
+                    return self._format_analysis_response(
+                        "Parameter Optimization Analysis",
+                        TradeAnalysisTools.find_optimal_parameters(trades_df)
+                    )
+                
+                elif any(word in message_lower for word in ['market', 'regime', 'condition', 'volatility']):
+                    return self._format_analysis_response(
+                        "Market Regime Analysis",
+                        TradeAnalysisTools.analyze_market_regimes(trades_df)
+                    )
+                
+                elif 'comprehensive' in message_lower or 'full report' in message_lower:
+                    # Generate comprehensive report
+                    strategy_config = self._load_strategy_config(yaml_path, trade_data)
+                    initial_capital = trade_data.get('metadata', {}).get('initial_capital', 10000) if trade_data else 10000
+                    return create_analysis_report(trades_df, strategy_config, initial_capital)
+                
+                else:
+                    # General analysis using LLM
+                    context = self._build_enhanced_analysis_context(trades_df, trade_data, yaml_path)
+                    system_prompt = """You are an expert quantitative analyst specializing in options trading analysis. 
+                    You have access to detailed trade data. Provide specific, data-driven insights with concrete numbers.
+                    Focus on actionable recommendations."""
+                    
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": context + "\n\nAnalysis Request: " + message}
+                        ],
+                        temperature=0.3,  # Lower temperature for analysis
+                        max_tokens=4000
+                    )
+                    
+                    return response.choices[0].message.content
             
-            return response.choices[0].message.content
-            
+            else:
+                # Regular chat mode
+                context = self._build_context(trade_data, csv_path, yaml_path)
+                
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are an expert options trader and quantitative analyst specializing in backtesting analysis. Focus on providing specific, actionable insights."},
+                        {"role": "user", "content": context + "\n\nUser Query: " + message}
+                    ],
+                    temperature=0.7,
+                    max_tokens=4000
+                )
+                
+                return response.choices[0].message.content
+                
         except Exception as e:
             return f"Error in LM Studio chat: {str(e)}"
     
@@ -304,6 +379,97 @@ Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
                 context += f"\n  Exit reason: {trade.get('exit_reason')}\n"
         
         return context
+    
+    def _format_analysis_response(self, title: str, content: str) -> str:
+        """Format analysis response with title"""
+        return f"## {title}\n\n{content}"
+    
+    def _load_strategy_config(self, yaml_path: Optional[str], trade_data: Optional[Dict]) -> Dict:
+        """Load strategy configuration from YAML or trade data"""
+        strategy_config = {}
+        
+        if yaml_path and Path(yaml_path).exists():
+            try:
+                with open(yaml_path, 'r') as f:
+                    strategy_config = yaml.safe_load(f)
+            except Exception:
+                pass
+        
+        # Fallback to finding strategy file
+        if not strategy_config and trade_data:
+            strategy_name = trade_data.get('metadata', {}).get('strategy', '')
+            if strategy_name:
+                yaml_paths = [
+                    Path(__file__).parent.parent / f"{strategy_name}.yaml",
+                    Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
+                ]
+                for path in yaml_paths:
+                    if path.exists():
+                        try:
+                            with open(path, 'r') as f:
+                                strategy_config = yaml.safe_load(f)
+                                break
+                        except Exception:
+                            pass
+        
+        return strategy_config
+    
+    def _build_enhanced_analysis_context(self, trades_df: pd.DataFrame, 
+                                       trade_data: Optional[Dict], yaml_path: Optional[str]) -> str:
+        """Build enhanced context for LLM-based analysis"""
+        context_parts = []
+        
+        # Add metadata
+        if trade_data and 'metadata' in trade_data:
+            metadata = trade_data['metadata']
+            context_parts.append(f"""
+Backtest Overview:
+- Name: {metadata.get('memorable_name', 'Unknown')}
+- Strategy: {metadata.get('strategy', 'Unknown')}
+- Total Return: {metadata.get('total_return', 0):.2%}
+- Total Trades: {len(trades_df)}
+- Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
+""")
+        
+        # Add trade statistics
+        if not trades_df.empty:
+            winning_trades = trades_df[trades_df['pnl'] > 0]
+            losing_trades = trades_df[trades_df['pnl'] < 0]
+            
+            context_parts.append(f"""
+Trade Statistics:
+- Win Rate: {(len(winning_trades) / len(trades_df) * 100):.1f}%
+- Average Win: ${winning_trades['pnl'].mean():.2f if len(winning_trades) > 0 else 0:.2f}
+- Average Loss: ${losing_trades['pnl'].mean():.2f if len(losing_trades) > 0 else 0:.2f}
+- Max Win: ${trades_df['pnl'].max():.2f}
+- Max Loss: ${trades_df['pnl'].min():.2f}
+- Average Days Held: {trades_df['days_held'].mean():.1f if 'days_held' in trades_df.columns else 'N/A'}
+""")
+            
+            # Add sample trades
+            context_parts.append("\nSample Trades (first 5):")
+            for i, trade in trades_df.head(5).iterrows():
+                context_parts.append(f"""
+Trade {i+1}:
+- Type: {trade.get('option_type', 'N/A')}
+- Entry: {trade.get('entry_date', 'N/A')} at ${trade.get('entry_price', 0):.2f}
+- Exit: {trade.get('exit_date', 'N/A')} at ${trade.get('exit_price', 0):.2f}
+- P&L: ${trade.get('pnl', 0):.2f} ({trade.get('pnl_pct', 0):.1f}%)
+- Exit Reason: {trade.get('exit_reason', 'N/A')}
+""")
+        
+        # Add strategy config summary
+        strategy_config = self._load_strategy_config(yaml_path, trade_data)
+        if strategy_config:
+            context_parts.append(f"\nStrategy Configuration Summary:")
+            context_parts.append(f"- Name: {strategy_config.get('name', 'Unknown')}")
+            context_parts.append(f"- Type: {strategy_config.get('type', 'Unknown')}")
+            if 'entry_rules' in strategy_config:
+                entry = strategy_config['entry_rules']
+                context_parts.append(f"- Delta Target: {entry.get('delta_target', 'N/A')}")
+                context_parts.append(f"- DTE Range: {entry.get('dte_min', 'N/A')}-{entry.get('dte_max', 'N/A')}")
+        
+        return "\n".join(context_parts)
     
     def is_configured(self) -> bool:
         """Check if LM Studio is configured"""
@@ -356,7 +522,7 @@ class GeminiProvider(BaseAIProvider):
 class MultiProviderAIAssistant:
     """Main AI Assistant supporting multiple providers"""
     
-    def __init__(self, provider: Literal["openai", "lm_studio", "gemini", "ollama_agent"] = "lm_studio"):
+    def __init__(self, provider: Literal["openai", "lm_studio", "gemini"] = "lm_studio"):
         self.provider_name = provider
         self.provider = None
         self.trade_logs_dir = Path(__file__).parent / "trade_logs"
@@ -369,7 +535,7 @@ class MultiProviderAIAssistant:
         
         # Don't initialize provider in __init__ to avoid deepcopy issues
     
-    def set_provider(self, provider: Literal["openai", "lm_studio", "gemini", "ollama_agent"]) -> bool:
+    def set_provider(self, provider: Literal["openai", "lm_studio", "gemini"]) -> bool:
         """Switch to a different AI provider"""
         self.provider_name = provider
         
@@ -378,12 +544,6 @@ class MultiProviderAIAssistant:
         elif provider == "lm_studio":
             base_url = os.getenv("LM_STUDIO_URL", "http://localhost:1234/v1")
             self.provider = LMStudioProvider(base_url)
-        elif provider == "ollama_agent":
-            if OllamaAgentProvider:
-                self.provider = OllamaAgentProvider()
-            else:
-                print("Ollama agent not available. Please install langchain and ollama.")
-                return False
         else:  # gemini
             self.provider = GeminiProvider()
         
@@ -435,9 +595,7 @@ class MultiProviderAIAssistant:
         if self.provider_name == "openai":
             return "OpenAI Assistant API with Code Interpreter"
         elif self.provider_name == "lm_studio":
-            return "LM Studio (Local)"
-        elif self.provider_name == "ollama_agent":
-            return "Ollama Agent (Mixtral with LangChain)"
+            return "LM Studio (Local) - Smart Analysis Mode"
         else:
             return "Google Gemini"
     
