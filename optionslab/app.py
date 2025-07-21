@@ -37,7 +37,7 @@ from optionslab.visualization import (
     plot_strategy_heatmap,
     create_summary_dashboard
 )
-from optionslab.ai_assistant_multi import MultiProviderAIAssistant
+from optionslab.ai_lm_studio import get_lm_studio_assistant
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -538,40 +538,43 @@ def create_simple_interface():
             
             # AI Assistant Tab
             with gr.TabItem("🤖 AI Assistant", id=2):
-                ai_assistant = gr.State(MultiProviderAIAssistant())
+                # Get the singleton LM Studio assistant
+                ai_assistant = get_lm_studio_assistant()
                 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("### 🔧 AI Configuration")
+                        gr.Markdown("### 🔧 LM Studio Assistant")
                         
-                        # Provider selection
-                        ai_provider = gr.Dropdown(
-                            choices=["openai", "lm_studio", "gemini"],
-                            value="lm_studio",
-                            label="AI Provider",
-                            info="Select AI provider for analysis"
-                        )
+                        # Connection status
+                        provider_status = gr.Markdown("")
                         
-                        provider_status = gr.Markdown("Provider: LM Studio (Local)")
+                        # Check status button
+                        check_status_btn = gr.Button("🔄 Check Connection", size="sm")
                         
-                        # API key input (only shown for Gemini)
-                        with gr.Group(visible=False) as gemini_config:
-                            api_key_input = gr.Textbox(
-                                type="password",
-                                label="Gemini API Key",
-                                placeholder="Enter or use .env"
-                            )
-                            save_key_btn = gr.Button("💾 Update Key", size="sm")
+                        gr.Markdown("""**Requirements:**
+- LM Studio running locally
+- Model loaded in LM Studio
+- Default port: 1234""")
                         
-                        api_status = gr.Markdown("")
-                        
-                        start_chat_btn = gr.Button("🤖 Start AI Assistant", variant="primary", size="lg")
+                        start_chat_btn = gr.Button("🤖 Start AI Chat", variant="primary", size="lg")
                         
                     with gr.Column(scale=2):
                         gr.Markdown("### 💬 Chat")
-                        chatbot = gr.Chatbot(height=500, type="messages")
-                        msg_input = gr.Textbox(label="Message", lines=2)
-                        send_btn = gr.Button("📤 Send", variant="primary")
+                        chatbot = gr.Chatbot(
+                            height=500, 
+                            type="messages",
+                            show_label=False,
+                            elem_id="chatbot"
+                        )
+                        
+                        with gr.Row():
+                            msg_input = gr.Textbox(
+                                label="Message",
+                                placeholder="Ask about performance, risk metrics, trade patterns...",
+                                lines=2,
+                                scale=4
+                            )
+                            send_btn = gr.Button("📤 Send", variant="primary", scale=1)
             
             # Log Manager Tab
             with gr.TabItem("📁 Log Manager", id=3):
@@ -734,41 +737,27 @@ def create_simple_interface():
             outputs=[main_chart]
         )
         
-        # Provider switching
-        def switch_provider(provider, ai):
-            """Switch AI provider and update UI"""
-            success = ai.set_provider(provider)
-            
-            if provider == "openai":
-                status_msg = "Provider: OpenAI Assistant API with Code Interpreter"
-                show_gemini = False
-            elif provider == "lm_studio":
-                status_msg = "Provider: LM Studio (Local) - Smart Analysis Mode Enabled ✨"
-                show_gemini = False
-            else:  # gemini
-                status_msg = "Provider: Google Gemini"
-                show_gemini = True
-            
-            if not success:
-                status_msg += " ⚠️ Failed to initialize"
+        # LM Studio status check
+        def check_lm_studio_status():
+            """Check LM Studio connection status"""
+            if ai_assistant.is_configured():
+                return "✅ LM Studio connected"
             else:
-                status_msg += " ✅"
-                
-            return status_msg, gr.update(visible=show_gemini), ai
+                # Try to initialize
+                if ai_assistant.initialize():
+                    return "✅ LM Studio connected"
+                else:
+                    return "❌ LM Studio not running or no model loaded"
         
-        ai_provider.change(
-            fn=switch_provider,
-            inputs=[ai_provider, ai_assistant],
-            outputs=[provider_status, gemini_config, ai_assistant]
+        # Initial status check
+        provider_status.value = check_lm_studio_status()
+        
+        check_status_btn.click(
+            fn=check_lm_studio_status,
+            outputs=[provider_status]
         )
         
-        save_key_btn.click(
-            fn=lambda key, ai: ("✅ Key saved", ai.set_api_key(key) or ai),
-            inputs=[api_key_input, ai_assistant],
-            outputs=[api_status, ai_assistant]
-        )
-        
-        def start_ai_chat(ai_assistant, backtest_data):
+        def start_ai_chat(backtest_data):
             """Start AI conversation with initial greeting and options"""
             if not ai_assistant.is_configured():
                 return [{"role": "assistant", "content": "❌ AI not configured. Please set API key."}]
@@ -777,38 +766,66 @@ def create_simple_interface():
                 return [{"role": "assistant", "content": "❌ No backtest selected. Please select a backtest from the dropdown above."}]
             
             metadata = backtest_data.get('metadata', {})
-            greeting = f"""👋 I'm a professional financial trader and quantitative developer with expertise in options trading strategies.
+            # Check what data is available
+            csv_path = metadata.get('json_path', '').replace('.json', '.csv') if metadata.get('json_path') else None
+            has_csv = csv_path and Path(csv_path).exists()
+            strategy_name = metadata.get('strategy', '')
+            yaml_paths = [
+                Path(__file__).parent.parent / f"{strategy_name}.yaml",
+                Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
+            ]
+            has_yaml = any(path.exists() for path in yaml_paths) if strategy_name else False
+            
+            # Check for additional data sources
+            data_dir = Path(__file__).parent / "data"
+            has_historical_data = data_dir.exists() and list(data_dir.glob("*.parquet"))
+            
+            results_dir = Path(__file__).parent.parent / "results" / "backtests"
+            num_previous_backtests = len(list(results_dir.glob("*.json"))) if results_dir.exists() else 0
+            
+            greeting = f"""👋 Hello! I'm your AI Trading Assistant, ready to analyze your backtest.
 
-I've reviewed the backtest: **{metadata.get('memorable_name', 'Unknown')}**
+**Selected Backtest:** {metadata.get('memorable_name', 'Unknown')}
 - Total Return: {metadata.get('total_return', 0):.1%}
 - Total Trades: {metadata.get('total_trades', 0)}
 - Win Rate: {metadata.get('win_rate', 0):.1%}
 
-I've been provided with:
-- Complete trade data for all {metadata.get('total_trades', 0)} trades
-- Full strategy configuration and parameters
-- Performance metrics and statistics
-- Trade-by-trade details including Greeks, P&L, and exit reasons
+**📊 Data I Have Access To:**
+✅ Backtest metadata (returns, dates, capital)
+✅ Trade-by-trade data ({"CSV with full details" if has_csv else "JSON summary only"})
+✅ Strategy configuration ({"YAML file found" if has_yaml else "Not found - using metadata"})
+✅ Entry/exit prices and dates
+✅ P&L for each trade
+✅ Exit reasons
+✅ Position sizes
+{"✅ Historical SPY options data (2020-2025)" if has_historical_data else "❌ Historical options data not found"}
+{"✅ " + str(num_previous_backtests) + " previous backtest results for comparison" if num_previous_backtests > 0 else "❌ No previous backtests found"}
+✅ Trade log documentation and guides
 
-As an experienced trader and coder, I can help you with:
-1. 📊 **Performance Analysis** - Calculate Sharpe, Sortino, and risk metrics
-2. 🔍 **Losing Pattern Analysis** - Find common patterns in losing trades
-3. 💡 **Parameter Optimization** - Suggest optimal delta, DTE, and exit strategies
-4. 📈 **Market Regime Analysis** - Performance across different market conditions
-5. ✅ **Strategy Adherence** - Validate trades against strategy rules
-6. 📑 **Comprehensive Report** - Generate full analysis report
+**❌ Data I Don't Have (but would enhance analysis):**
+- Market data during trades (SPY, VIX levels)
+- Greeks evolution over trade lifetime
+- Intraday price movements
+- Implied volatility history
+- Broader market context
+- Real-time data access
 
-💡 **Smart Analysis Mode**: Just ask naturally - I'll automatically use specialized tools for analysis keywords like "risk metrics", "losing patterns", "optimize", etc.
+**💡 I can best help with:**
+- Analyzing win/loss patterns
+- Calculating risk metrics (Sharpe, Sortino)
+- Finding parameter optimization opportunities
+- Validating strategy adherence
+- Identifying exit reason effectiveness
 
-What aspect would you like to explore?"""
+What would you like to explore?"""
             
             return [{"role": "assistant", "content": greeting}]
         
-        def chat_with_ai(message, chat_history, ai_assistant, backtest_data):
+        def chat_with_ai(message, chat_history, backtest_data):
             """Handle chat messages and maintain conversation"""
             if not ai_assistant.is_configured():
                 chat_history.append({"role": "user", "content": message})
-                chat_history.append({"role": "assistant", "content": "❌ AI not configured. Please set API key."})
+                chat_history.append({"role": "assistant", "content": "❌ LM Studio not connected. Please check connection."})
                 return chat_history, ""
             
             if not backtest_data:
@@ -819,36 +836,8 @@ What aspect would you like to explore?"""
             # Add user message to history
             chat_history.append({"role": "user", "content": message})
             
-            # Determine what the user wants
-            message_lower = message.lower()
-            
-            if any(word in message_lower for word in ["analyze", "performance", "trades", "1"]):
-                # Analyze backtest performance
-                metadata = backtest_data.get('metadata', {})
-                trades = backtest_data.get('trades', [])
-                
-                prompt = f"""Analyze this backtest: {metadata.get('memorable_name')}
-Total Return: {metadata.get('total_return', 0):.1%}
-Total Trades: {len(trades)}
-Provide insights and suggestions."""
-                
-                response = ai_assistant.chat(prompt, backtest_data)
-                
-            elif any(word in message_lower for word in ["implementation", "quality", "check", "verify", "2"]):
-                # Check implementation adequacy
-                response = ai_assistant.analyze_implementation_adequacy(backtest_data)
-                
-            elif any(word in message_lower for word in ["improve", "optimize", "suggestion", "3"]):
-                # Provide improvement suggestions
-                response = ai_assistant.chat("Based on this backtest data, what specific improvements would you recommend for better performance?", backtest_data)
-                
-            elif any(word in message_lower for word in ["report", "comprehensive", "full analysis"]):
-                # Generate comprehensive report (especially useful with Ollama agent)
-                response = ai_assistant.generate_analysis_report(backtest_data)
-                
-            else:
-                # General chat
-                response = ai_assistant.chat(message, backtest_data)
+            # Let the LLM handle all queries naturally
+            response = ai_assistant.chat(message, backtest_data)
             
             # Add AI response to history
             chat_history.append({"role": "assistant", "content": response})
@@ -858,21 +847,21 @@ Provide insights and suggestions."""
         
         start_chat_btn.click(
             fn=start_ai_chat,
-            inputs=[ai_assistant, selected_backtest_data],
+            inputs=[selected_backtest_data],
             outputs=[chatbot]
         )
         
         # Connect the send button for continuous conversation
         send_btn.click(
             fn=chat_with_ai,
-            inputs=[msg_input, chatbot, ai_assistant, selected_backtest_data],
+            inputs=[msg_input, chatbot, selected_backtest_data],
             outputs=[chatbot, msg_input]
         )
         
         # Also handle Enter key press
         msg_input.submit(
             fn=chat_with_ai,
-            inputs=[msg_input, chatbot, ai_assistant, selected_backtest_data],
+            inputs=[msg_input, chatbot, selected_backtest_data],
             outputs=[chatbot, msg_input]
         )
         

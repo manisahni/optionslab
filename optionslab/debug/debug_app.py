@@ -37,10 +37,10 @@ except Exception as e:
     traceback.print_exc()
 
 try:
-    from optionslab.ai_assistant_multi import MultiProviderAIAssistant
-    print("✅ ai_assistant_multi - OK")
+    from optionslab.ai_lm_studio import get_lm_studio_assistant
+    print("✅ ai_lm_studio - OK")
 except Exception as e:
-    print(f"❌ ai_assistant_multi - FAILED: {e}")
+    print(f"❌ ai_lm_studio - FAILED: {e}")
     traceback.print_exc()
 
 try:
