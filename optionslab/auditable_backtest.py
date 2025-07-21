@@ -766,8 +766,27 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
             print(f"🔍 AUDIT: Checking for entry opportunity (days since last entry: {days_since_entry})")
             print(f"📊 AUDIT: Current positions: {len(positions)}/{max_positions}")
             
+            # Determine if we should use advanced selection
+            # Use advanced selection if:
+            # 1. Explicitly enabled with use_advanced_selection: true
+            # 2. option_selection config is present
+            # 3. delta_target is defined in entry_rules
+            # 4. delta_target is defined in legs
+            has_delta_params = (
+                'option_selection' in config or
+                'delta_target' in config.get('entry_rules', {}) or
+                any('delta_target' in leg for leg in config.get('legs', []))
+            )
+            
+            should_use_advanced = config.get('use_advanced_selection', False) or has_delta_params
+            
+            # Warn if parameters are defined but advanced selection wasn't explicitly enabled
+            if has_delta_params and not config.get('use_advanced_selection', False):
+                print(f"⚠️  AUDIT: Delta/DTE parameters detected - automatically enabling advanced selection")
+                print(f"   (Add 'use_advanced_selection: true' to strategy config to remove this warning)")
+            
             # Find suitable option
-            if config.get('use_advanced_selection', False):
+            if should_use_advanced:
                 # Pass current positions to avoid duplicates
                 config['_current_positions'] = positions
                 selected_option = find_suitable_options_advanced(
@@ -786,7 +805,7 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
             
             if selected_option is not None:
                 # Verify selection criteria were met
-                if config.get('use_advanced_selection', False):
+                if should_use_advanced:
                     delta_target = config.get('option_selection', {}).get('delta_criteria', {}).get('target', 0.40)
                     dte_target = config.get('option_selection', {}).get('dte_criteria', {}).get('target', 30)
                     actual_delta = abs(selected_option.get('delta', 0))

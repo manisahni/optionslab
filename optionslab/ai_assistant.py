@@ -12,6 +12,8 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
+from PIL import Image
+import io
 
 
 class AIAssistant:
@@ -610,6 +612,14 @@ What aspect would you like to dive deeper into?
             json_path = metadata.get('json_path', '')
             csv_path = json_path.replace('.json', '.csv') if json_path else None
             
+            # Get plot path from metadata or construct it
+            plot_path = metadata.get('plot_path')
+            if not plot_path and json_path:
+                # Try to find plot file for older backtests
+                plot_path = json_path.replace('.json', '_dashboard.png')
+                if not Path(plot_path).exists():
+                    plot_path = None
+            
             # Find strategy YAML path
             yaml_paths = [
                 Path(__file__).parent.parent / f"{strategy_name}.yaml",
@@ -643,7 +653,14 @@ RESOURCES YOU HAVE ACCESS TO:
    - Risk management settings
    - Option selection criteria
 
-3. Backtesting Engine Source Code: {Path(__file__).parent}
+3. Performance Dashboard Plot: {plot_path or 'Not found'}
+   - Visual representation of P&L curve
+   - Trade markers and performance metrics
+   - Drawdown visualization
+   - Summary statistics
+   {f"(I can see this plot image and analyze it visually)" if plot_path and Path(plot_path).exists() else "(Plot not available for this backtest)"}
+
+4. Backtesting Engine Source Code: {Path(__file__).parent}
    - Implementation of the trading logic
    - Data processing algorithms
    - Risk management systems
@@ -656,12 +673,27 @@ As an experienced trader and coder, you can:
 - Provide insights on risk-adjusted returns
 - Debug strategy logic and execution issues
 - Recommend improvements to the trading system
+- Analyze visual performance charts when available
 
 User Query: {message}"""
             
             full_message = context
         
         try:
+            # Check if we have a plot image to include
+            if current_data and plot_path and Path(plot_path).exists():
+                try:
+                    # Load the plot image using PIL
+                    img = Image.open(plot_path)
+                    
+                    # Send multimodal content (text + image)
+                    response = self.chat_session.send_message([full_message, img])
+                    return response.text
+                except Exception as img_error:
+                    print(f"Warning: Could not load plot image: {img_error}")
+                    # Fall back to text-only
+            
+            # Text-only message (no plot or error loading plot)
             response = self.chat_session.send_message(full_message)
             return response.text
         except Exception as e:

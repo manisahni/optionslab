@@ -16,6 +16,7 @@ import sys
 import os
 import shutil
 import random
+import uuid
 from typing import List, Dict, Optional, Tuple
 
 # Import our auditable backtest functions
@@ -181,6 +182,7 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
     base_name = f"trades_{strategy_name}_{start_date}_to_{end_date}_{timestamp}"
     csv_path = month_dir / f"{base_name}.csv"
     json_path = month_dir / f"{base_name}.json"
+    plot_path = month_dir / f"{base_name}_dashboard.png"
     
     # Save CSV
     if not trades_df.empty:
@@ -189,6 +191,7 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
     # Prepare metadata
     total_return = results.get('total_return', 0)
     metadata = {
+        'backtest_id': str(uuid.uuid4()),  # Unique identifier
         'strategy': strategy_name,
         'start_date': start_date,
         'end_date': end_date,
@@ -198,7 +201,9 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
         'final_value': results.get('final_value', 0),
         'total_return': total_return,
         'total_trades': len(trades_df),
-        'win_rate': results.get('win_rate', 0)
+        'win_rate': results.get('win_rate', 0),
+        'json_path': str(json_path),  # Add path to metadata
+        'csv_path': str(csv_path)
     }
     
     # Convert DataFrame to dict and handle timestamps
@@ -231,6 +236,19 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
                     # Handle arrays/lists
                     trade[key] = list(value) if len(value) > 0 else None
         trades_list = trades_dict
+    
+    # Generate and save plot
+    plot_saved = False
+    if not trades_df.empty:
+        try:
+            dashboard_plot = create_summary_dashboard(trades_list, results.get('initial_capital', 10000))
+            if dashboard_plot:
+                dashboard_plot.savefig(str(plot_path), dpi=150, bbox_inches='tight')
+                plot_saved = True
+                # Add plot path to metadata
+                metadata['plot_path'] = str(plot_path)
+        except Exception as e:
+            print(f"Warning: Could not generate plot: {e}")
     
     # Save JSON with trades and metadata
     json_data = {
@@ -279,12 +297,15 @@ def delete_trade_log(log_path: str) -> bool:
     try:
         json_path = Path(log_path)
         csv_path = json_path.with_suffix('.csv')
+        plot_path = Path(str(json_path).replace('.json', '_dashboard.png'))
         
         # Delete files
         if json_path.exists():
             json_path.unlink()
         if csv_path.exists():
             csv_path.unlink()
+        if plot_path.exists():
+            plot_path.unlink()
         
         # Update index
         logs_dir = get_trade_logs_dir()

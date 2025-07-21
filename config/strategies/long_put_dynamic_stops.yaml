@@ -1,11 +1,13 @@
 # Long Put Strategy with Dynamic Stops and Greeks-Based Exits
 # Example configuration showing YAML support in backtester_enhanced.py
+# Note: Advanced delta/DTE selection is automatically enabled when delta_target is specified
 
 name: "Long Put with Dynamic Stops"
 description: "Bearish strategy using long puts with volatility-based dynamic stops and Greeks exit triggers"
 strategy_type: "long_put"
 category: "directional"
 version: "1.0"
+# use_advanced_selection: true  # Not needed - auto-detected from delta_target presence
 
 # Strategy Parameters
 parameters:
