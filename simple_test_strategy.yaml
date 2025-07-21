@@ -1,0 +1,79 @@
+# Simple Long Call Strategy
+# Basic directional call buying strategy
+
+name: "Simple Long Call"
+description: "Buy calls expecting price to go up"
+strategy_type: "long_call"
+category: "directional"
+use_advanced_selection: true  # Enable delta/DTE filtering
+
+# Strategy Parameters
+parameters:
+  initial_capital: 10000   # Starting capital
+  position_size: 0.05      # 5% of capital per trade
+  max_positions: 2         # Max concurrent positions
+  max_hold_days: 30        # Max days to hold position
+  entry_frequency: 3       # Days between entries
+
+# Strategy Configuration
+legs:
+  - type: call
+    direction: long        # Buy calls
+    quantity: 1
+    delta_target: 0.40     # 40-delta calls
+
+# Entry Rules
+entry_rules:
+  dte: 30                  # Days to expiration
+  delta_target: 0.40       # Target delta
+  
+  # Basic filters
+  volume_min: 100          # Minimum volume
+  open_interest_min: 500   # Minimum open interest
+
+# Exit Rules  
+exit_rules:
+  - condition: "profit_target"
+    target_percent: 50     # Exit at 50% profit
+    
+  - condition: "stop_loss"
+    stop_percent: -50      # Exit at 50% loss
+    
+  - condition: "time_stop"
+    max_days: 21           # Exit after 21 days
+
+# Risk Management
+risk_management:
+  max_positions: 2         # Max 2 concurrent positions
+  position_sizing: "fixed" # Fixed position size
+  max_position_size: 0.05  # 5% of capital per trade
+
+# Execution
+execution:
+  price_type: "market"     # Use market prices
+
+# Option Selection Configuration
+option_selection:
+  method: "delta"          # Select based on delta
+  
+  delta_criteria:
+    target: 0.40           # Target 0.40 delta (matches entry_rules)
+    tolerance: 0.05        # Accept 0.35-0.45 delta
+    
+  dte_criteria:
+    target: 30             # Target 30 DTE (matches entry_rules)
+    minimum: 25            # Min 25 days
+    maximum: 35            # Max 35 days
+    
+  liquidity_criteria:
+    min_volume: 100        # Minimum daily volume
+    min_open_interest: 500 # Minimum open interest
+    
+  strike_criteria:
+    prefer_round: true     # Prefer round number strikes
+    
+  # Fallback behavior if no options match all criteria
+  relaxation_order:
+    - "delta_tolerance"    # First relax delta tolerance
+    - "dte_range"         # Then relax DTE range
+    - "liquidity"         # Finally relax liquidity requirements

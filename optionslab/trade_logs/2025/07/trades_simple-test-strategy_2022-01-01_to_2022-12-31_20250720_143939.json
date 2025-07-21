@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "strategy": "simple-test-strategy",
+    "start_date": "2022-01-01",
+    "end_date": "2022-12-31",
+    "backtest_date": "2025-07-20T14:39:39.564432",
+    "memorable_name": "Swift Orca-1439",
+    "initial_capital": 10000,
+    "final_value": 8862.0,
+    "total_return": -0.1138,
+    "total_trades": 4,
+    "win_rate": 0.0
+  },
+  "trades": [
+    {
+      "trade_id": 1,
+      "entry_date": 

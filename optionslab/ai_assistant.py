@@ -596,18 +596,58 @@ What aspect would you like to dive deeper into?
         if not self.chat_session:
             return "Chat session not initialized. Please reload the AI assistant."
         
-        # Add current data context if provided
+        # Build context with file paths instead of structured data
         full_message = message
         if current_data:
-            context = f"\nCurrent backtest data:\n"
-            if 'final_value' in current_data:
-                context += f"- Final Value: ${current_data['final_value']:,.2f}\n"
-            if 'total_return' in current_data:
-                context += f"- Total Return: {current_data['total_return']:.2%}\n"
-            if 'trades' in current_data:
-                context += f"- Total Trades: {len(current_data['trades'])}\n"
+            metadata = current_data.get('metadata', {})
+            memorable_name = metadata.get('memorable_name', 'Unknown')
+            strategy_name = metadata.get('strategy', 'Unknown')
+            backtest_date = metadata.get('backtest_date', '')[:10]  # Just the date part
             
-            full_message = f"{context}\n{message}"
+            # Find the CSV file path
+            csv_filename = f"trades_{strategy_name}_{metadata.get('start_date')}_to_{metadata.get('end_date')}_{backtest_date.replace('-', '')}_*.csv"
+            json_path = metadata.get('json_path', '')
+            csv_path = json_path.replace('.json', '.csv') if json_path else None
+            
+            # Find strategy YAML path
+            yaml_paths = [
+                Path(__file__).parent.parent / f"{strategy_name}.yaml",
+                Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
+                Path(__file__).parent.parent / "simple_test_strategy.yaml"  # fallback
+            ]
+            yaml_path = None
+            for path in yaml_paths:
+                if path.exists():
+                    yaml_path = str(path)
+                    break
+            
+            context = f"""
+You are an AI assistant for OptionsLab, an options backtesting system. You have access to comprehensive data about the current backtest.
+
+CURRENT BACKTEST: {memorable_name}
+- Strategy: {strategy_name}
+- Performance: {metadata.get('total_return', 0):.2%}
+- Total Trades: {metadata.get('total_trades', 0)}
+
+DATA LOCATIONS:
+- Trade Data CSV: {csv_path or 'Not found'}
+  (Contains all trade details: entry/exit dates, prices, deltas, P&L, etc.)
+- Strategy YAML: {yaml_path or 'Not found'}
+  (Contains strategy rules and parameters)
+- Source Code: {Path(__file__).parent}
+  (Contains the backtesting engine implementation)
+
+The CSV file has comprehensive columns including:
+- trade_id, entry_date, exit_date, option_type, strike, expiration
+- entry/exit prices, deltas, all greeks, underlying prices
+- P&L, exit reasons, selection process details
+- Complete greeks history for each trade
+
+Please analyze this data to answer the user's question.
+
+User Query: {message}"""
+            
+            full_message = context
         
         try:
             response = self.chat_session.send_message(full_message)
@@ -638,3 +678,134 @@ Please provide:
             return response.text
         except Exception as e:
             return f"Error getting suggestions: {str(e)}"
+    
+    def calculate_implementation_metrics(self, backtest_data: Dict, strategy_yaml: Dict) -> Dict:
+        """Calculate implementation metrics from trades"""
+        trades = backtest_data.get('trades', [])
+        completed_trades = [t for t in trades if t.get('exit_date')]
+        
+        if not completed_trades:
+            return {'status': 'NO_TRADES'}
+        
+        # Get target values from YAML
+        entry_rules = strategy_yaml.get('entry_rules', {})
+        option_selection = strategy_yaml.get('option_selection', {})
+        
+        target_delta = option_selection.get('delta_criteria', {}).get('target', 
+                                          entry_rules.get('delta_target', 0.40))
+        delta_tolerance = option_selection.get('delta_criteria', {}).get('tolerance', 0.05)
+        
+        target_dte = option_selection.get('dte_criteria', {}).get('target',
+                                        entry_rules.get('dte', 30))
+        dte_min = option_selection.get('dte_criteria', {}).get('minimum', 25)
+        dte_max = option_selection.get('dte_criteria', {}).get('maximum', 35)
+        
+        # Analyze deltas
+        deltas = [abs(t.get('entry_delta', 0)) for t in completed_trades if t.get('entry_delta')]
+        delta_in_range = sum(1 for d in deltas if abs(d - target_delta) <= delta_tolerance)
+        
+        # Analyze DTEs
+        dtes = [t.get('dte_at_entry', 0) for t in completed_trades if t.get('dte_at_entry')]
+        dte_in_range = sum(1 for d in dtes if dte_min <= d <= dte_max)
+        
+        metrics = {
+            'target_delta': target_delta,
+            'delta_tolerance': delta_tolerance,
+            'actual_deltas': deltas,
+            'delta_compliance_rate': delta_in_range / len(deltas) if deltas else 0,
+            'target_dte': target_dte,
+            'dte_range': [dte_min, dte_max],
+            'actual_dtes': dtes,
+            'dte_compliance_rate': dte_in_range / len(dtes) if dtes else 0,
+            'status': 'CALCULATED'
+        }
+        
+        return metrics
+    
+    def analyze_implementation_adequacy(self, backtest_data: Dict) -> str:
+        """Analyze how well a backtest implements its strategy specification"""
+        if not self.is_configured():
+            return "AI not configured. Please set API key."
+        
+        metadata = backtest_data.get('metadata', {})
+        trades = backtest_data.get('trades', [])
+        
+        # Find file paths
+        memorable_name = metadata.get('memorable_name', 'Unknown')
+        strategy_name = metadata.get('strategy', 'Unknown')
+        json_path = metadata.get('json_path', '')
+        csv_path = json_path.replace('.json', '.csv') if json_path else None
+        
+        # Find strategy YAML path
+        yaml_paths = [
+            Path(__file__).parent.parent / f"{strategy_name}.yaml",
+            Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
+            Path(__file__).parent.parent / "simple_test_strategy.yaml"
+        ]
+        yaml_path = None
+        for path in yaml_paths:
+            if path.exists():
+                yaml_path = str(path)
+                break
+        
+        prompt = f"""
+You are an expert financial programmer and options trader analyzing a backtest implementation.
+Your task is to assess how well the code implements the strategy specified in the YAML file.
+
+BACKTEST: {memorable_name}
+- Strategy: {strategy_name}
+- Performance: {metadata.get('total_return', 0):.2%}
+- Total Trades: {metadata.get('total_trades', 0)}
+- Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
+
+FILE LOCATIONS:
+- Trade Data CSV: {csv_path}
+  (Contains complete trade details with all entry/exit data, greeks, and P&L)
+- Strategy YAML: {yaml_path}
+  (Contains the strategy specification that should have been implemented)
+- Source Code: {Path(__file__).parent}
+
+Please analyze these files to provide a comprehensive IMPLEMENTATION ADEQUACY ASSESSMENT:
+"""
+        # Continue with adequacy assessment format
+
+        prompt += f"""
+
+=== STRATEGY IMPLEMENTATION ADEQUACY REPORT ===
+
+📋 YAML SPECIFICATION vs ACTUAL IMPLEMENTATION:
+
+1. DELTA TARGETING ADEQUACY: [Rate and explain]
+   - Compare YAML delta target with actual entry deltas in CSV
+   - Calculate compliance rate
+
+2. DTE TARGETING ADEQUACY: [Rate and explain]
+   - Compare YAML DTE target with actual DTEs in CSV
+   - Calculate compliance rate
+
+3. EXIT RULES ADEQUACY: [Rate and explain]
+   - Check if exit_reason in CSV matches YAML exit rules
+   - Verify stop losses and profit targets
+
+4. POSITION SIZING ADEQUACY: [Rate and explain]
+   - Check if position sizes follow YAML specifications
+
+5. OPTION SELECTION ADEQUACY: [Rate and explain]
+   - Verify liquidity filters and other selection criteria
+
+=== IMPLEMENTATION SCORE: [X]/100 ===
+
+CRITICAL ISSUES:
+[List any major deviations from the YAML specification]
+
+RECOMMENDATIONS:
+[Specific fixes to improve implementation]
+
+VERDICT: [VALID/INVALID] - Explain if this backtest truly tests the intended strategy.
+"""
+        
+        try:
+            response = self.chat_session.send_message(prompt)
+            return response.text
+        except Exception as e:
+            return f"Error generating implementation analysis: {str(e)}"

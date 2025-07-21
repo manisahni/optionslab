@@ -530,7 +530,7 @@ def create_simple_interface():
                         save_key_btn = gr.Button("💾 Update Key", size="sm")
                         api_status = gr.Markdown("Checking...")
                         
-                        analyze_btn = gr.Button("🎯 Analyze Current Backtest", variant="primary", size="lg")
+                        start_chat_btn = gr.Button("🤖 Start AI Assistant", variant="primary", size="lg")
                         
                     with gr.Column(scale=2):
                         gr.Markdown("### 💬 Chat")
@@ -671,25 +671,6 @@ def create_simple_interface():
             else:
                 return f"✅ Deleted {count} old backtests", gr.update(choices=[], value=None)
         
-        def analyze_backtest(ai_assistant, backtest_data):
-            """Analyze selected backtest with AI"""
-            if not ai_assistant.is_configured():
-                return [{"role": "assistant", "content": "❌ AI not configured. Please set API key."}]
-            
-            if not backtest_data:
-                return [{"role": "assistant", "content": "❌ No backtest selected."}]
-            
-            # Generate analysis
-            metadata = backtest_data.get('metadata', {})
-            trades = backtest_data.get('trades', [])
-            
-            prompt = f"""Analyze this backtest: {metadata.get('memorable_name')}
-Total Return: {metadata.get('total_return', 0):.1%}
-Total Trades: {len(trades)}
-Provide insights and suggestions."""
-            
-            response = ai_assistant.chat(prompt, backtest_data)
-            return [{"role": "assistant", "content": response}]
         
         # Wire up event handlers
         refresh_btn.click(
@@ -724,10 +705,98 @@ Provide insights and suggestions."""
             outputs=[api_status, ai_assistant]
         )
         
-        analyze_btn.click(
-            fn=analyze_backtest,
+        def start_ai_chat(ai_assistant, backtest_data):
+            """Start AI conversation with initial greeting and options"""
+            if not ai_assistant.is_configured():
+                return [{"role": "assistant", "content": "❌ AI not configured. Please set API key."}]
+            
+            if not backtest_data:
+                return [{"role": "assistant", "content": "❌ No backtest selected. Please select a backtest from the dropdown above."}]
+            
+            metadata = backtest_data.get('metadata', {})
+            greeting = f"""👋 Hello! I'm your AI Assistant for OptionsLab.
+
+I'm analyzing the backtest: **{metadata.get('memorable_name', 'Unknown')}**
+- Total Return: {metadata.get('total_return', 0):.1%}
+- Total Trades: {metadata.get('total_trades', 0)}
+- Win Rate: {metadata.get('win_rate', 0):.1%}
+
+How can I help you? Here are some things I can do:
+1. 📊 **Analyze the trading performance** - I'll review the trades and provide insights
+2. 🔍 **Check implementation quality** - I'll verify if the strategy was implemented correctly
+3. 💡 **Suggest improvements** - I can recommend optimizations based on the results
+4. ❓ **Answer questions** - Ask me anything about this backtest
+
+What would you like to explore?"""
+            
+            return [{"role": "assistant", "content": greeting}]
+        
+        def chat_with_ai(message, chat_history, ai_assistant, backtest_data):
+            """Handle chat messages and maintain conversation"""
+            if not ai_assistant.is_configured():
+                chat_history.append({"role": "user", "content": message})
+                chat_history.append({"role": "assistant", "content": "❌ AI not configured. Please set API key."})
+                return chat_history, ""
+            
+            if not backtest_data:
+                chat_history.append({"role": "user", "content": message})
+                chat_history.append({"role": "assistant", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history, ""
+            
+            # Add user message to history
+            chat_history.append({"role": "user", "content": message})
+            
+            # Determine what the user wants
+            message_lower = message.lower()
+            
+            if any(word in message_lower for word in ["analyze", "performance", "trades", "1"]):
+                # Analyze backtest performance
+                metadata = backtest_data.get('metadata', {})
+                trades = backtest_data.get('trades', [])
+                
+                prompt = f"""Analyze this backtest: {metadata.get('memorable_name')}
+Total Return: {metadata.get('total_return', 0):.1%}
+Total Trades: {len(trades)}
+Provide insights and suggestions."""
+                
+                response = ai_assistant.chat(prompt, backtest_data)
+                
+            elif any(word in message_lower for word in ["implementation", "quality", "check", "verify", "2"]):
+                # Check implementation adequacy
+                response = ai_assistant.analyze_implementation_adequacy(backtest_data)
+                
+            elif any(word in message_lower for word in ["improve", "optimize", "suggestion", "3"]):
+                # Provide improvement suggestions
+                response = ai_assistant.chat("Based on this backtest data, what specific improvements would you recommend for better performance?", backtest_data)
+                
+            else:
+                # General chat
+                response = ai_assistant.chat(message, backtest_data)
+            
+            # Add AI response to history
+            chat_history.append({"role": "assistant", "content": response})
+            
+            # Return updated history and clear input
+            return chat_history, ""
+        
+        start_chat_btn.click(
+            fn=start_ai_chat,
             inputs=[ai_assistant, selected_backtest_data],
             outputs=[chatbot]
+        )
+        
+        # Connect the send button for continuous conversation
+        send_btn.click(
+            fn=chat_with_ai,
+            inputs=[msg_input, chatbot, ai_assistant, selected_backtest_data],
+            outputs=[chatbot, msg_input]
+        )
+        
+        # Also handle Enter key press
+        msg_input.submit(
+            fn=chat_with_ai,
+            inputs=[msg_input, chatbot, ai_assistant, selected_backtest_data],
+            outputs=[chatbot, msg_input]
         )
         
         delete_btn.click(
