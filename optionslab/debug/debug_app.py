@@ -30,21 +30,21 @@ for module in modules_to_test:
 
 print("\nTesting local imports:")
 try:
-    from auditable_backtest import run_auditable_backtest
+    from optionslab.auditable_backtest import run_auditable_backtest
     print("✅ auditable_backtest - OK")
 except Exception as e:
     print(f"❌ auditable_backtest - FAILED: {e}")
     traceback.print_exc()
 
 try:
-    from ai_assistant import AIAssistant
-    print("✅ ai_assistant - OK")
+    from optionslab.ai_assistant_multi import MultiProviderAIAssistant
+    print("✅ ai_assistant_multi - OK")
 except Exception as e:
-    print(f"❌ ai_assistant - FAILED: {e}")
+    print(f"❌ ai_assistant_multi - FAILED: {e}")
     traceback.print_exc()
 
 try:
-    from visualization import plot_pnl_curve
+    from optionslab.visualization import plot_pnl_curve
     print("✅ visualization - OK")
 except Exception as e:
     print(f"❌ visualization - FAILED: {e}")

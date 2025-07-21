@@ -32,12 +32,6 @@ except ImportError:
 import pandas as pd
 import yaml
 
-# Import agentic analysis if available
-try:
-    from .agentic_analysis import TradeAnalysisTools, create_analysis_report
-except ImportError:
-    TradeAnalysisTools = None
-    create_analysis_report = None
 
 
 class BaseAIProvider(ABC):
@@ -247,229 +241,201 @@ class LMStudioProvider(BaseAIProvider):
     
     def chat(self, message: str, trade_data: Optional[Dict] = None, 
              csv_path: Optional[str] = None, yaml_path: Optional[str] = None) -> str:
-        """Chat with LM Studio with smart routing for analysis"""
+        """Chat with LM Studio"""
         if not self.is_configured():
             return "LM Studio not configured. Make sure LM Studio is running."
         
         try:
-            # Check if this is an analysis request
-            message_lower = message.lower()
-            is_analysis = any(word in message_lower for word in [
-                'analyze', 'analysis', 'report', 'risk', 'metrics', 'sharpe', 'sortino',
-                'losing', 'pattern', 'optimal', 'parameter', 'adherence', 'validate',
-                'market regime', 'comprehensive', 'deep dive'
-            ])
+            # Check if this is a code troubleshooting request
+            include_code = any(word in message.lower() for word in ['error', 'bug', 'crash', 'fix', 'debug', 'code', 'implementation'])
             
-            if is_analysis and TradeAnalysisTools and csv_path and Path(csv_path).exists():
-                # Load data for analysis
-                trades_df = pd.read_csv(csv_path)
-                
-                # Route to specific analysis tool
-                if any(word in message_lower for word in ['losing', 'loss', 'pattern']):
-                    return self._format_analysis_response(
-                        "Losing Pattern Analysis",
-                        TradeAnalysisTools.find_losing_patterns(trades_df)
-                    )
-                
-                elif any(word in message_lower for word in ['risk', 'sharpe', 'sortino', 'drawdown', 'metrics']):
-                    initial_capital = trade_data.get('metadata', {}).get('initial_capital', 10000) if trade_data else 10000
-                    return self._format_analysis_response(
-                        "Risk Metrics Analysis", 
-                        TradeAnalysisTools.calculate_risk_metrics(trades_df, initial_capital)
-                    )
-                
-                elif any(word in message_lower for word in ['adherence', 'validate', 'rules', 'violation']):
-                    strategy_config = self._load_strategy_config(yaml_path, trade_data)
-                    return self._format_analysis_response(
-                        "Strategy Adherence Check",
-                        TradeAnalysisTools.validate_strategy_adherence(trades_df, strategy_config)
-                    )
-                
-                elif any(word in message_lower for word in ['optimize', 'optimal', 'parameter', 'improve']):
-                    return self._format_analysis_response(
-                        "Parameter Optimization Analysis",
-                        TradeAnalysisTools.find_optimal_parameters(trades_df)
-                    )
-                
-                elif any(word in message_lower for word in ['market', 'regime', 'condition', 'volatility']):
-                    return self._format_analysis_response(
-                        "Market Regime Analysis",
-                        TradeAnalysisTools.analyze_market_regimes(trades_df)
-                    )
-                
-                elif 'comprehensive' in message_lower or 'full report' in message_lower:
-                    # Generate comprehensive report
-                    strategy_config = self._load_strategy_config(yaml_path, trade_data)
-                    initial_capital = trade_data.get('metadata', {}).get('initial_capital', 10000) if trade_data else 10000
-                    return create_analysis_report(trades_df, strategy_config, initial_capital)
-                
-                else:
-                    # General analysis using LLM
-                    context = self._build_enhanced_analysis_context(trades_df, trade_data, yaml_path)
-                    system_prompt = """You are an expert quantitative analyst specializing in options trading analysis. 
-                    You have access to detailed trade data. Provide specific, data-driven insights with concrete numbers.
-                    Focus on actionable recommendations."""
-                    
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": context + "\n\nAnalysis Request: " + message}
-                        ],
-                        temperature=0.3,  # Lower temperature for analysis
-                        max_tokens=4000
-                    )
-                    
-                    return response.choices[0].message.content
+            # Build context from available data
+            context = self._build_context(trade_data, csv_path, yaml_path, include_code_context=include_code)
             
-            else:
-                # Regular chat mode
-                context = self._build_context(trade_data, csv_path, yaml_path)
-                
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are an expert options trader and quantitative analyst specializing in backtesting analysis. Focus on providing specific, actionable insights."},
-                        {"role": "user", "content": context + "\n\nUser Query: " + message}
-                    ],
-                    temperature=0.7,
-                    max_tokens=4000
-                )
-                
-                return response.choices[0].message.content
+            # Comprehensive system prompt
+            system_prompt = """You are an expert options trader, quantitative analyst, and code troubleshooting specialist for OptionsLab.
+            
+            Your expertise includes:
+            1. OPTIONS TRADING: Deep understanding of Greeks, strategies (spreads, straddles, condors), and market mechanics
+            2. BACKTESTING ANALYSIS: Evaluating strategy performance, risk metrics (Sharpe, Sortino, max drawdown), and trade patterns
+            3. CODE TROUBLESHOOTING: Debugging Python trading systems, understanding ThetaData API, and fixing implementation issues
+            4. STRATEGY VALIDATION: Ensuring trades match strategy rules (delta targets, DTE, exit conditions)
+            5. PERFORMANCE OPTIMIZATION: Identifying parameter improvements and market regime adaptations
+            
+            When analyzing:
+            - Provide specific numbers and percentages
+            - Identify patterns in winning vs losing trades
+            - Suggest concrete parameter adjustments
+            - Explain any code errors or implementation issues
+            - Recommend actionable improvements
+            
+            You have access to trade logs, strategy configurations, and can help debug code issues."""
+            
+            # Single LLM call for all requests
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": context + "\n\nUser Query: " + message}
+                ],
+                temperature=0.5,
+                max_tokens=4000
+            )
+            
+            return response.choices[0].message.content
                 
         except Exception as e:
             return f"Error in LM Studio chat: {str(e)}"
     
     def _build_context(self, trade_data: Optional[Dict], 
-                      csv_path: Optional[str], yaml_path: Optional[str]) -> str:
-        """Build context from files for LM Studio"""
-        context = ""
-        
-        # Add metadata
-        if trade_data and 'metadata' in trade_data:
-            metadata = trade_data['metadata']
-            context += f"""
-Current Backtest: {metadata.get('memorable_name', 'Unknown')}
-Strategy: {metadata.get('strategy', 'Unknown')}
-Performance: {metadata.get('total_return', 0):.2%}
-Total Trades: {metadata.get('total_trades', 0)}
-Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
-
-"""
-        
-        # Add strategy config
-        if yaml_path and Path(yaml_path).exists():
-            try:
-                with open(yaml_path, 'r') as f:
-                    strategy_config = yaml.safe_load(f)
-                context += f"\nSTRATEGY CONFIGURATION:\n{yaml.dump(strategy_config, default_flow_style=False)}\n"
-            except Exception as e:
-                context += f"\nError loading strategy config: {e}\n"
-        
-        # Add trade summary (first 10 trades)
-        if trade_data and 'trades' in trade_data:
-            trades = trade_data['trades']
-            context += f"\nTRADE SUMMARY ({len(trades)} total trades):\n"
-            for i, trade in enumerate(trades[:10]):
-                context += f"\nTrade {i+1}:"
-                context += f"\n  Entry: {trade.get('entry_date')} at ${trade.get('entry_price', 0):.2f}"
-                context += f"\n  Exit: {trade.get('exit_date')} at ${trade.get('exit_price', 0):.2f}"
-                context += f"\n  P&L: {trade.get('pnl_percent', 0):.1f}%"
-                context += f"\n  Exit reason: {trade.get('exit_reason')}\n"
-        
-        return context
-    
-    def _format_analysis_response(self, title: str, content: str) -> str:
-        """Format analysis response with title"""
-        return f"## {title}\n\n{content}"
-    
-    def _load_strategy_config(self, yaml_path: Optional[str], trade_data: Optional[Dict]) -> Dict:
-        """Load strategy configuration from YAML or trade data"""
-        strategy_config = {}
-        
-        if yaml_path and Path(yaml_path).exists():
-            try:
-                with open(yaml_path, 'r') as f:
-                    strategy_config = yaml.safe_load(f)
-            except Exception:
-                pass
-        
-        # Fallback to finding strategy file
-        if not strategy_config and trade_data:
-            strategy_name = trade_data.get('metadata', {}).get('strategy', '')
-            if strategy_name:
-                yaml_paths = [
-                    Path(__file__).parent.parent / f"{strategy_name}.yaml",
-                    Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
-                ]
-                for path in yaml_paths:
-                    if path.exists():
-                        try:
-                            with open(path, 'r') as f:
-                                strategy_config = yaml.safe_load(f)
-                                break
-                        except Exception:
-                            pass
-        
-        return strategy_config
-    
-    def _build_enhanced_analysis_context(self, trades_df: pd.DataFrame, 
-                                       trade_data: Optional[Dict], yaml_path: Optional[str]) -> str:
-        """Build enhanced context for LLM-based analysis"""
+                      csv_path: Optional[str], yaml_path: Optional[str], 
+                      include_code_context: bool = False) -> str:
+        """Build comprehensive context from all available data"""
         context_parts = []
         
-        # Add metadata
+        # Add metadata and performance overview
         if trade_data and 'metadata' in trade_data:
             metadata = trade_data['metadata']
-            context_parts.append(f"""
-Backtest Overview:
-- Name: {metadata.get('memorable_name', 'Unknown')}
-- Strategy: {metadata.get('strategy', 'Unknown')}
-- Total Return: {metadata.get('total_return', 0):.2%}
-- Total Trades: {len(trades_df)}
-- Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
-""")
+            context_parts.append(f"""=== BACKTEST OVERVIEW ===
+Name: {metadata.get('memorable_name', 'Unknown')}
+Strategy: {metadata.get('strategy', 'Unknown')}
+Total Return: {metadata.get('total_return', 0):.2%}
+Sharpe Ratio: {metadata.get('sharpe_ratio', 'N/A')}
+Max Drawdown: {metadata.get('max_drawdown', 'N/A')}
+Total Trades: {metadata.get('total_trades', 0)}
+Date Range: {metadata.get('start_date')} to {metadata.get('end_date')}
+Initial Capital: ${metadata.get('initial_capital', 10000):,}""")
         
-        # Add trade statistics
-        if not trades_df.empty:
-            winning_trades = trades_df[trades_df['pnl'] > 0]
-            losing_trades = trades_df[trades_df['pnl'] < 0]
-            
-            context_parts.append(f"""
-Trade Statistics:
-- Win Rate: {(len(winning_trades) / len(trades_df) * 100):.1f}%
-- Average Win: ${winning_trades['pnl'].mean():.2f if len(winning_trades) > 0 else 0:.2f}
-- Average Loss: ${losing_trades['pnl'].mean():.2f if len(losing_trades) > 0 else 0:.2f}
-- Max Win: ${trades_df['pnl'].max():.2f}
-- Max Loss: ${trades_df['pnl'].min():.2f}
-- Average Days Held: {trades_df['days_held'].mean():.1f if 'days_held' in trades_df.columns else 'N/A'}
-""")
-            
-            # Add sample trades
-            context_parts.append("\nSample Trades (first 5):")
-            for i, trade in trades_df.head(5).iterrows():
-                context_parts.append(f"""
-Trade {i+1}:
-- Type: {trade.get('option_type', 'N/A')}
-- Entry: {trade.get('entry_date', 'N/A')} at ${trade.get('entry_price', 0):.2f}
-- Exit: {trade.get('exit_date', 'N/A')} at ${trade.get('exit_price', 0):.2f}
-- P&L: ${trade.get('pnl', 0):.2f} ({trade.get('pnl_pct', 0):.1f}%)
-- Exit Reason: {trade.get('exit_reason', 'N/A')}
-""")
+        # Add detailed strategy configuration
+        if yaml_path and Path(yaml_path).exists():
+            try:
+                with open(yaml_path, 'r') as f:
+                    strategy_config = yaml.safe_load(f)
+                
+                # Extract key strategy parameters
+                context_parts.append("\n=== STRATEGY CONFIGURATION ===")
+                context_parts.append(f"Name: {strategy_config.get('name', 'Unknown')}")
+                context_parts.append(f"Type: {strategy_config.get('type', 'Unknown')}")
+                
+                if 'entry_rules' in strategy_config:
+                    entry = strategy_config['entry_rules']
+                    context_parts.append(f"\nEntry Rules:")
+                    context_parts.append(f"  - Delta Target: {entry.get('delta_target', 'N/A')}")
+                    context_parts.append(f"  - DTE Range: {entry.get('dte_min', 'N/A')} to {entry.get('dte_max', 'N/A')} days")
+                    context_parts.append(f"  - IV Percentile Min: {entry.get('iv_percentile_min', 'N/A')}")
+                
+                if 'exit_rules' in strategy_config:
+                    exit = strategy_config['exit_rules']
+                    context_parts.append(f"\nExit Rules:")
+                    context_parts.append(f"  - Profit Target: {exit.get('profit_target', 'N/A')}")
+                    context_parts.append(f"  - Stop Loss: {exit.get('stop_loss', 'N/A')}")
+                    context_parts.append(f"  - DTE Exit: {exit.get('dte_exit', 'N/A')} days")
+                
+                if 'position_sizing' in strategy_config:
+                    sizing = strategy_config['position_sizing']
+                    context_parts.append(f"\nPosition Sizing:")
+                    context_parts.append(f"  - Method: {sizing.get('method', 'N/A')}")
+                    context_parts.append(f"  - Max Risk: {sizing.get('max_risk_per_trade', 'N/A')}")
+                    
+            except Exception as e:
+                context_parts.append(f"\nError loading strategy config: {e}")
         
-        # Add strategy config summary
-        strategy_config = self._load_strategy_config(yaml_path, trade_data)
-        if strategy_config:
-            context_parts.append(f"\nStrategy Configuration Summary:")
-            context_parts.append(f"- Name: {strategy_config.get('name', 'Unknown')}")
-            context_parts.append(f"- Type: {strategy_config.get('type', 'Unknown')}")
-            if 'entry_rules' in strategy_config:
-                entry = strategy_config['entry_rules']
-                context_parts.append(f"- Delta Target: {entry.get('delta_target', 'N/A')}")
-                context_parts.append(f"- DTE Range: {entry.get('dte_min', 'N/A')}-{entry.get('dte_max', 'N/A')}")
+        # Add comprehensive trade data if CSV is available
+        if csv_path and Path(csv_path).exists():
+            try:
+                trades_df = pd.read_csv(csv_path)
+                if not trades_df.empty:
+                    # Calculate detailed statistics
+                    winning_trades = trades_df[trades_df['pnl'] > 0]
+                    losing_trades = trades_df[trades_df['pnl'] < 0]
+                    
+                    context_parts.append(f"""\n=== TRADE STATISTICS ===
+Total Trades: {len(trades_df)}
+Winning Trades: {len(winning_trades)} ({(len(winning_trades) / len(trades_df) * 100):.1f}%)
+Losing Trades: {len(losing_trades)} ({(len(losing_trades) / len(trades_df) * 100):.1f}%)
+Breakeven Trades: {len(trades_df) - len(winning_trades) - len(losing_trades)}
+
+Profit/Loss:
+  - Total P&L: ${trades_df['pnl'].sum():.2f}
+  - Average Win: ${winning_trades['pnl'].mean():.2f if len(winning_trades) > 0 else 0:.2f}
+  - Average Loss: ${losing_trades['pnl'].mean():.2f if len(losing_trades) > 0 else 0:.2f}
+  - Max Win: ${trades_df['pnl'].max():.2f}
+  - Max Loss: ${trades_df['pnl'].min():.2f}
+  - Profit Factor: {abs(winning_trades['pnl'].sum() / losing_trades['pnl'].sum()):.2f if len(losing_trades) > 0 and losing_trades['pnl'].sum() != 0 else 'N/A'}""")
+                    
+                    # Add exit reason analysis
+                    if 'exit_reason' in trades_df.columns:
+                        exit_counts = trades_df['exit_reason'].value_counts()
+                        context_parts.append("\nExit Reasons:")
+                        for reason, count in exit_counts.items():
+                            context_parts.append(f"  - {reason}: {count} ({count/len(trades_df)*100:.1f}%)")
+                    
+                    # Add timing analysis
+                    if 'days_held' in trades_df.columns:
+                        context_parts.append(f"\nTiming Analysis:")
+                        context_parts.append(f"  - Average Days Held: {trades_df['days_held'].mean():.1f}")
+                        context_parts.append(f"  - Min Days Held: {trades_df['days_held'].min():.0f}")
+                        context_parts.append(f"  - Max Days Held: {trades_df['days_held'].max():.0f}")
+                    
+                    # Add sample trades with more detail
+                    context_parts.append("\n=== SAMPLE TRADES (Recent 10) ===")
+                    for i, trade in trades_df.tail(10).iterrows():
+                        context_parts.append(f"""\nTrade {len(trades_df) - 9 + i}:
+  Type: {trade.get('option_type', 'N/A')} | Strike: ${trade.get('strike_price', 0):.2f}
+  Entry: {trade.get('entry_date')} at ${trade.get('entry_price', 0):.2f}
+  Exit: {trade.get('exit_date')} at ${trade.get('exit_price', 0):.2f}  
+  P&L: ${trade.get('pnl', 0):.2f} ({trade.get('pnl_pct', 0):.1f}%)
+  Days Held: {trade.get('days_held', 'N/A')}
+  Exit Reason: {trade.get('exit_reason', 'N/A')}
+  Entry Delta: {trade.get('entry_delta', 'N/A')}
+  Entry IV: {trade.get('entry_iv', 'N/A')}""")
+                    
+            except Exception as e:
+                context_parts.append(f"\nError loading trade data: {e}")
+        
+        # Add code context if requested (for troubleshooting)
+        if include_code_context and trade_data:
+            strategy_name = trade_data.get('metadata', {}).get('strategy', '')
+            if strategy_name:
+                context_parts.append(f"\n=== CODE CONTEXT ===\nStrategy Implementation: {strategy_name}")
+                
+                # Try to read the strategy code
+                code_content = self._read_strategy_code(strategy_name)
+                if code_content:
+                    # Include first 1000 chars of code for context
+                    context_parts.append("\nRelevant code snippet:")
+                    context_parts.append(f"```python\n{code_content[:1000]}...\n```")
+                    context_parts.append("(Full code available for detailed troubleshooting)")
+                else:
+                    context_parts.append("Strategy code file not found - may need to check implementation")
         
         return "\n".join(context_parts)
+    
+    
+    
+    
+    def _read_strategy_code(self, strategy_name: str) -> Optional[str]:
+        """Read strategy implementation code for troubleshooting"""
+        if not strategy_name:
+            return None
+            
+        # Common paths for strategy files
+        possible_paths = [
+            Path(__file__).parent / f"{strategy_name}.py",
+            Path(__file__).parent / "strategies" / f"{strategy_name}.py",
+            Path(__file__).parent.parent / f"{strategy_name}.py",
+            Path(__file__).parent.parent / "strategies" / f"{strategy_name}.py"
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                try:
+                    with open(path, 'r') as f:
+                        return f.read()
+                except Exception:
+                    pass
+        
+        return None
     
     def is_configured(self) -> bool:
         """Check if LM Studio is configured"""
@@ -617,40 +583,6 @@ class MultiProviderAIAssistant:
     
     def generate_analysis_report(self, backtest_data: Dict) -> str:
         """Generate a comprehensive analysis report"""
-        if self.provider_name == "ollama_agent" and create_analysis_report:
-            # Use the specialized report generator
-            csv_path = None
-            yaml_path = None
-            
-            if backtest_data:
-                metadata = backtest_data.get('metadata', {})
-                json_path = metadata.get('json_path', '')
-                if json_path:
-                    csv_path = json_path.replace('.json', '.csv')
-                
-                # Load data
-                if csv_path and Path(csv_path).exists():
-                    import yaml
-                    trades_df = pd.read_csv(csv_path)
-                    
-                    # Find strategy config
-                    strategy_name = metadata.get('strategy', '')
-                    strategy_config = {}
-                    if strategy_name:
-                        yaml_paths = [
-                            Path(__file__).parent.parent / f"{strategy_name}.yaml",
-                            Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
-                        ]
-                        for path in yaml_paths:
-                            if path.exists():
-                                with open(path, 'r') as f:
-                                    strategy_config = yaml.safe_load(f)
-                                break
-                    
-                    initial_capital = metadata.get('initial_capital', 10000)
-                    return create_analysis_report(trades_df, strategy_config, initial_capital)
-        
-        # Fallback to regular chat
         return self.chat(
             "Please generate a comprehensive analysis report including risk metrics, "
             "strategy adherence, market regime analysis, and optimization suggestions.",
