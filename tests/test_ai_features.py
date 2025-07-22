@@ -163,20 +163,20 @@ def check_dependencies():
     print("📦 Checking Dependencies...")
     
     required_packages = [
-        'google-generativeai',
-        'streamlit',
-        'pandas',
-        'plotly'
+        ('google-generativeai', 'google.generativeai'),
+        ('streamlit', 'streamlit'),
+        ('pandas', 'pandas'),
+        ('plotly', 'plotly')
     ]
     
     missing = []
-    for package in required_packages:
+    for package_name, import_name in required_packages:
         try:
-            __import__(package.replace('-', '_'))
-            print(f"   ✅ {package}")
+            __import__(import_name)
+            print(f"   ✅ {package_name}")
         except ImportError:
-            print(f"   ❌ {package} - MISSING")
-            missing.append(package)
+            print(f"   ❌ {package_name} - MISSING")
+            missing.append(package_name)
     
     if missing:
         print(f"\n⚠️  Missing packages: {', '.join(missing)}")

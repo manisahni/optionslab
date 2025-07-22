@@ -1,15 +1,18 @@
 {
   "metadata": {
+    "backtest_id": "c287f784-c4b1-4e34-bb8d-dfc379d6fc82",
     "strategy": "simple-test-strategy",
     "start_date": "2022-01-01",
     "end_date": "2022-12-31",
-    "backtest_date": "2025-07-20T20:34:51.585461",
-    "memorable_name": "Crystal Lion-2034",
+    "backtest_date": "2025-07-21T18:33:50.097286",
+    "memorable_name": "Thunder Phoenix-1833",
     "initial_capital": 10000,
     "final_value": 8862.0,
     "total_return": -0.1138,
     "total_trades": 4,
-    "win_rate": 0.0
+    "win_rate": 0.0,
+    "json_path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_183350.json",
+    "csv_path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_183350.csv"
   },
   "trades": [
     {

@@ -139,62 +139,10 @@ def audit_strategy_config(config_path):
         print(f"❌ AUDIT: Failed to load config: {e}")
         return None
 
-def find_suitable_options(data, current_price, strategy_type="long_call", target_strike_offset=0.02):
-    """Find suitable options and audit the selection process"""
-    print(f"🔍 AUDIT: Finding suitable options for {strategy_type}")
-    print(f"💰 AUDIT: Current underlying price: ${current_price:.2f}")
-    
-    # Determine option type based on strategy
-    if strategy_type in ["long_put", "short_call", "protective_put"]:
-        option_right = 'P'
-        option_type_name = "put"
-        # For puts, target strike is below current price
-        if strategy_type == "long_put":
-            target_strike_offset = -abs(target_strike_offset)
-    else:
-        option_right = 'C'
-        option_type_name = "call"
-    
-    # Filter for appropriate option type
-    options = data[data['right'] == option_right]
-    print(f"📊 AUDIT: Found {len(options)} {option_type_name} options")
-    
-    # Calculate target strike
-    target_strike = current_price * (1 + target_strike_offset)
-    print(f"🎯 AUDIT: Target strike: ${target_strike:.2f}")
-    
-    # Find options within reasonable range
-    strike_range = 0.05  # 5% range
-    suitable = options[
-        (options['strike_dollars'] >= current_price * (1 - strike_range)) &
-        (options['strike_dollars'] <= current_price * (1 + strike_range)) &
-        (options['close'] > 0) &
-        (options['implied_vol'] > 0)
-    ]
-    
-    print(f"✅ AUDIT: Found {len(suitable)} suitable options")
-    
-    if not suitable.empty:
-        # Select closest to target strike
-        suitable = suitable.copy()  # Create a copy to avoid SettingWithCopyWarning
-        suitable['strike_diff'] = abs(suitable['strike_dollars'] - target_strike)
-        selected = suitable.loc[suitable['strike_diff'].idxmin()]
-        
-        print(f"🎯 AUDIT: Selected option:")
-        print(f"   Type: {option_type_name.upper()}")
-        print(f"   Strike: ${selected['strike_dollars']:.2f}")
-        print(f"   Price: ${selected['close']:.2f}")
-        print(f"   IV: {selected['implied_vol']:.3f}")
-        print(f"   Expiration: {selected['expiration']}")
-        
-        return selected
-    else:
-        print(f"❌ AUDIT: No suitable options found")
-        return None
 
-def find_suitable_options_advanced(data, current_price, config, current_date):
-    """Advanced option selection with delta, DTE, and liquidity filters"""
-    print(f"🔍 AUDIT: Advanced option selection started")
+def find_suitable_options(data, current_price, config, current_date):
+    """Option selection with delta, DTE, and liquidity filters"""
+    print(f"🔍 AUDIT: Option selection started")
     print(f"💰 AUDIT: Current underlying price: ${current_price:.2f}")
     print(f"📅 AUDIT: Current date: {current_date}")
     
@@ -512,6 +460,64 @@ def create_implementation_metrics(trades: List[Dict], config: Dict) -> Dict:
     return metrics
 
 
+def calculate_compliance_scorecard(trades):
+    """Calculate compliance metrics for all trades"""
+    if not trades:
+        return {
+            'overall_score': 0,
+            'delta_compliance': 0,
+            'dte_compliance': 0,
+            'entry_compliance': 0,
+            'exit_compliance': 0,
+            'total_trades': 0,
+            'compliant_trades': 0,
+            'non_compliant_trades': 0,
+            'compliance_by_category': {}
+        }
+    
+    # Count compliance by category
+    delta_compliant = 0
+    delta_total = 0
+    dte_compliant = 0
+    dte_total = len(trades)
+    
+    for trade in trades:
+        # Delta compliance
+        if 'delta_compliant' in trade and trade.get('delta_actual') is not None:
+            delta_total += 1
+            if trade['delta_compliant']:
+                delta_compliant += 1
+        
+        # DTE compliance
+        if 'dte_compliant' in trade and trade['dte_compliant']:
+            dte_compliant += 1
+    
+    # Calculate percentages
+    delta_compliance_pct = (delta_compliant / delta_total * 100) if delta_total > 0 else 0
+    dte_compliance_pct = (dte_compliant / dte_total * 100) if dte_total > 0 else 100
+    
+    # Count fully compliant trades
+    compliant_trades = sum(1 for t in trades if t.get('compliance_score', 0) == 100)
+    
+    # Overall score is average of all categories
+    overall_score = (delta_compliance_pct + dte_compliance_pct) / 2
+    
+    return {
+        'overall_score': overall_score,
+        'delta_compliance': delta_compliance_pct,
+        'dte_compliance': dte_compliance_pct,
+        'entry_compliance': 100,  # Will enhance with entry timing checks
+        'exit_compliance': 100,   # Will enhance with exit rule checks
+        'total_trades': len(trades),
+        'compliant_trades': compliant_trades,
+        'non_compliant_trades': len(trades) - compliant_trades,
+        'compliance_by_category': {
+            'delta': {'compliant': delta_compliant, 'total': delta_total, 'pct': delta_compliance_pct},
+            'dte': {'compliant': dte_compliant, 'total': dte_total, 'pct': dte_compliance_pct}
+        }
+    }
+
+
 def run_auditable_backtest(data_file, config_file, start_date, end_date):
     """Run a fully auditable backtest"""
     print("🚀 AUDIT: Starting auditable backtest")
@@ -766,56 +772,28 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
             print(f"🔍 AUDIT: Checking for entry opportunity (days since last entry: {days_since_entry})")
             print(f"📊 AUDIT: Current positions: {len(positions)}/{max_positions}")
             
-            # Determine if we should use advanced selection
-            # Use advanced selection if:
-            # 1. Explicitly enabled with use_advanced_selection: true
-            # 2. option_selection config is present
-            # 3. delta_target is defined in entry_rules
-            # 4. delta_target is defined in legs
-            has_delta_params = (
-                'option_selection' in config or
-                'delta_target' in config.get('entry_rules', {}) or
-                any('delta_target' in leg for leg in config.get('legs', []))
+            # Always use delta/DTE/liquidity based selection (mandatory)
+            # Pass current positions to avoid duplicates
+            config['_current_positions'] = positions
+            selected_option = find_suitable_options(
+                date_data,
+                current_price,
+                config,
+                current_date
             )
-            
-            should_use_advanced = config.get('use_advanced_selection', False) or has_delta_params
-            
-            # Warn if parameters are defined but advanced selection wasn't explicitly enabled
-            if has_delta_params and not config.get('use_advanced_selection', False):
-                print(f"⚠️  AUDIT: Delta/DTE parameters detected - automatically enabling advanced selection")
-                print(f"   (Add 'use_advanced_selection: true' to strategy config to remove this warning)")
-            
-            # Find suitable option
-            if should_use_advanced:
-                # Pass current positions to avoid duplicates
-                config['_current_positions'] = positions
-                selected_option = find_suitable_options_advanced(
-                    date_data,
-                    current_price,
-                    config,
-                    current_date
-                )
-            else:
-                selected_option = find_suitable_options(
-                    date_data, 
-                    current_price, 
-                    config['strategy_type'],
-                    0.02  # 2% above current price
-                )
             
             if selected_option is not None:
                 # Verify selection criteria were met
-                if should_use_advanced:
-                    delta_target = config.get('option_selection', {}).get('delta_criteria', {}).get('target', 0.40)
-                    dte_target = config.get('option_selection', {}).get('dte_criteria', {}).get('target', 30)
-                    actual_delta = abs(selected_option.get('delta', 0))
-                    actual_dte = selected_option.get('dte', 0)
-                    
-                    # Log any mismatches
-                    if abs(actual_delta - delta_target) > 0.05:
-                        print(f"⚠️  AUDIT: Delta mismatch - Target: {delta_target}, Actual: {actual_delta:.4f}")
-                    if abs(actual_dte - dte_target) > 5:
-                        print(f"⚠️  AUDIT: DTE mismatch - Target: {dte_target}, Actual: {actual_dte}")
+                delta_target = config.get('option_selection', {}).get('delta_criteria', {}).get('target', 0.40)
+                dte_target = config.get('option_selection', {}).get('dte_criteria', {}).get('target', 30)
+                actual_delta = abs(selected_option.get('delta', 0))
+                actual_dte = selected_option.get('dte', 0)
+                
+                # Log any mismatches
+                if abs(actual_delta - delta_target) > 0.05:
+                    print(f"⚠️  AUDIT: Delta mismatch - Target: {delta_target}, Actual: {actual_delta:.4f}")
+                if abs(actual_dte - dte_target) > 5:
+                    print(f"⚠️  AUDIT: DTE mismatch - Target: {dte_target}, Actual: {actual_dte}")
                 
                 # Calculate position size
                 contracts, cost = calculate_position_size(
@@ -860,6 +838,16 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                         'entry_gamma': selected_option.get('gamma', None),
                         'entry_theta': selected_option.get('theta', None),
                         'entry_vega': selected_option.get('vega', None),
+                        # Compliance tracking
+                        'delta_target': config['option_selection']['delta_criteria']['target'],
+                        'delta_tolerance': config['option_selection']['delta_criteria']['tolerance'],
+                        'delta_actual': selected_option.get('delta', None),
+                        'delta_compliant': False,  # Will calculate below
+                        'dte_target': config['option_selection']['dte_criteria']['target'],
+                        'dte_min': config['option_selection']['dte_criteria']['minimum'],
+                        'dte_max': config['option_selection']['dte_criteria']['maximum'],
+                        'dte_actual': (pd.to_datetime(selected_option['expiration']) - pd.to_datetime(current_date)).days,
+                        'dte_compliant': False,  # Will calculate below
                         'entry_rho': selected_option.get('rho', None),
                         'entry_iv': selected_option.get('implied_vol', None),
                         'entry_volume': selected_option.get('volume', None),
@@ -867,6 +855,23 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
                         # Add selection process details for AI analysis
                         'selection_process': selected_option.get('selection_process', {})
                     }
+                    
+                    # Calculate compliance
+                    if trade['delta_actual'] is not None:
+                        delta_min = trade['delta_target'] - trade['delta_tolerance']
+                        delta_max = trade['delta_target'] + trade['delta_tolerance']
+                        trade['delta_compliant'] = delta_min <= trade['delta_actual'] <= delta_max
+                    
+                    trade['dte_compliant'] = trade['dte_min'] <= trade['dte_actual'] <= trade['dte_max']
+                    
+                    # Calculate overall compliance score
+                    compliance_checks = []
+                    if trade['delta_actual'] is not None:
+                        compliance_checks.append(trade['delta_compliant'])
+                    compliance_checks.append(trade['dte_compliant'])
+                    
+                    trade['compliance_score'] = sum(compliance_checks) / len(compliance_checks) * 100 if compliance_checks else 0
+                    
                     trades.append(trade)
                     
                     # Update portfolio with Greeks and IV tracking
@@ -1297,6 +1302,9 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
     # Create implementation metrics for AI analysis
     implementation_metrics = create_implementation_metrics(trades, config)
     
+    # Calculate compliance scorecard
+    compliance_scorecard = calculate_compliance_scorecard(trades)
+    
     # Prepare results dictionary
     results = {
         'final_value': final_value,
@@ -1310,6 +1318,7 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
         'max_drawdown': max_drawdown if 'max_drawdown' in locals() else None,
         'start_date': start_date,
         'end_date': end_date,
+        'compliance_scorecard': compliance_scorecard,
         'implementation_metrics': implementation_metrics
     }
     

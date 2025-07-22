@@ -398,6 +398,171 @@ def plot_strategy_heatmap(trades: List[Dict]) -> go.Figure:
     return fig
 
 
+def plot_delta_histogram(trades: List[Dict]) -> go.Figure:
+    """Plot histogram of actual delta values vs target bands"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Extract delta data
+    deltas = []
+    targets = []
+    
+    for trade in trades:
+        if 'delta_actual' in trade and trade['delta_actual'] is not None:
+            deltas.append(trade['delta_actual'])
+            if 'delta_target' in trade:
+                targets.append(trade['delta_target'])
+    
+    if not deltas:
+        return go.Figure().add_annotation(text="No delta data available", showarrow=False)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add histogram
+    fig.add_trace(go.Histogram(
+        x=deltas,
+        name='Actual Delta',
+        nbinsx=20,
+        marker_color='blue',
+        opacity=0.7
+    ))
+    
+    # Add target band if available
+    if targets:
+        target = targets[0]  # Assuming same target for all trades
+        tolerance = trades[0].get('delta_tolerance', 0.05)
+        
+        # Add vertical lines for target band
+        fig.add_vline(x=target - tolerance, line_dash="dash", line_color="red", 
+                      annotation_text=f"Min: {target-tolerance:.2f}")
+        fig.add_vline(x=target, line_dash="solid", line_color="green", 
+                      annotation_text=f"Target: {target:.2f}")
+        fig.add_vline(x=target + tolerance, line_dash="dash", line_color="red", 
+                      annotation_text=f"Max: {target+tolerance:.2f}")
+    
+    # Calculate compliance percentage
+    compliant = sum(1 for t in trades if t.get('delta_compliant', False))
+    total = len([t for t in trades if 'delta_actual' in t and t['delta_actual'] is not None])
+    compliance_pct = (compliant / total * 100) if total > 0 else 0
+    
+    fig.update_layout(
+        title=f'Delta Distribution - {compliance_pct:.1f}% Compliant',
+        xaxis_title='Delta',
+        yaxis_title='Count',
+        showlegend=True,
+        template='plotly_white'
+    )
+    
+    return fig
+
+
+def plot_dte_histogram(trades: List[Dict]) -> go.Figure:
+    """Plot histogram of actual DTE values vs target bands"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Extract DTE data
+    dtes = []
+    
+    for trade in trades:
+        if 'dte_actual' in trade:
+            dtes.append(trade['dte_actual'])
+    
+    if not dtes:
+        return go.Figure().add_annotation(text="No DTE data available", showarrow=False)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add histogram
+    fig.add_trace(go.Histogram(
+        x=dtes,
+        name='Actual DTE',
+        nbinsx=20,
+        marker_color='purple',
+        opacity=0.7
+    ))
+    
+    # Add target band
+    if trades and 'dte_min' in trades[0]:
+        dte_min = trades[0]['dte_min']
+        dte_max = trades[0]['dte_max']
+        dte_target = trades[0].get('dte_target', (dte_min + dte_max) / 2)
+        
+        # Add vertical lines for target band
+        fig.add_vline(x=dte_min, line_dash="dash", line_color="red", 
+                      annotation_text=f"Min: {dte_min}")
+        fig.add_vline(x=dte_target, line_dash="solid", line_color="green", 
+                      annotation_text=f"Target: {dte_target}")
+        fig.add_vline(x=dte_max, line_dash="dash", line_color="red", 
+                      annotation_text=f"Max: {dte_max}")
+    
+    # Calculate compliance percentage
+    compliant = sum(1 for t in trades if t.get('dte_compliant', False))
+    total = len(trades)
+    compliance_pct = (compliant / total * 100) if total > 0 else 0
+    
+    fig.update_layout(
+        title=f'DTE Distribution - {compliance_pct:.1f}% Compliant',
+        xaxis_title='Days to Expiration',
+        yaxis_title='Count',
+        showlegend=True,
+        template='plotly_white'
+    )
+    
+    return fig
+
+
+def plot_compliance_scorecard(compliance_data: Dict) -> go.Figure:
+    """Create visual compliance scorecard"""
+    fig = go.Figure()
+    
+    # Create scorecard data
+    categories = ['Overall', 'Delta', 'DTE', 'Entry', 'Exit']
+    scores = [
+        compliance_data.get('overall_score', 0),
+        compliance_data.get('delta_compliance', 0),
+        compliance_data.get('dte_compliance', 0),
+        compliance_data.get('entry_compliance', 0),
+        compliance_data.get('exit_compliance', 0)
+    ]
+    
+    # Color based on score
+    colors = ['green' if s >= 90 else 'yellow' if s >= 70 else 'red' for s in scores]
+    
+    # Create bar chart
+    fig.add_trace(go.Bar(
+        x=categories,
+        y=scores,
+        text=[f'{s:.1f}%' for s in scores],
+        textposition='auto',
+        marker_color=colors,
+        name='Compliance Score'
+    ))
+    
+    # Add threshold lines
+    fig.add_hline(y=90, line_dash="dash", line_color="green", 
+                  annotation_text="Excellent (90%)")
+    fig.add_hline(y=70, line_dash="dash", line_color="orange", 
+                  annotation_text="Acceptable (70%)")
+    
+    # Add summary stats
+    total_trades = compliance_data.get('total_trades', 0)
+    compliant_trades = compliance_data.get('compliant_trades', 0)
+    
+    fig.update_layout(
+        title=f'Compliance Scorecard - {compliant_trades}/{total_trades} Fully Compliant Trades',
+        xaxis_title='Category',
+        yaxis_title='Compliance %',
+        yaxis_range=[0, 105],
+        showlegend=False,
+        template='plotly_white'
+    )
+    
+    return fig
+
+
 def create_summary_dashboard(trades: List[Dict], initial_capital: float = 10000) -> go.Figure:
     """Create a comprehensive dashboard with multiple charts"""
     if not trades:
@@ -472,3 +637,27 @@ def create_summary_dashboard(trades: List[Dict], initial_capital: float = 10000)
     fig.update_yaxes(title_text="Cost ($)", row=2, col=1)
     
     return fig
+
+
+# ===== ENHANCED TECHNICAL ANALYSIS VISUALIZATIONS =====
+
+def plot_technical_indicators_dashboard(trades: List[Dict]) -> go.Figure:
+    """Create comprehensive technical indicators dashboard"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Filter trades with Greeks history
+    trades_with_history = [t for t in trades if 'greeks_history' in t and t['greeks_history']]
+    if not trades_with_history:
+        return go.Figure().add_annotation(text="No technical data available", showarrow=False)
+    
+    # Create subplots
+    fig = make_subplots(
+        rows=3, cols=2,
+        subplot_titles=('RSI Evolution', 'Bollinger Bands Position', 
+                       'EMA Alignment Over Time', 'MACD Signals',
+                       'Maximum Excursion Analysis', 'Volatility Regime'),
+        specs=[[{"secondary_y": True}, {"secondary_y": False}],
+               [{"secondary_y": False}, {"secondary_y": False}],
+               [{"secondary_y": False}, {"secondary_y": False}]]
+    )

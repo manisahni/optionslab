@@ -20,7 +20,7 @@ import uuid
 from typing import List, Dict, Optional, Tuple
 
 # Import our auditable backtest functions
-from optionslab.auditable_backtest import (
+from .auditable_backtest import (
     load_and_audit_data,
     audit_strategy_config,
     find_suitable_options,
@@ -29,15 +29,18 @@ from optionslab.auditable_backtest import (
 )
 
 # Import visualization and AI modules
-from optionslab.visualization import (
+from .visualization import (
     plot_pnl_curve,
     plot_trade_markers,
     plot_greeks_evolution,
     plot_win_loss_distribution,
     plot_strategy_heatmap,
-    create_summary_dashboard
+    create_summary_dashboard,
+    plot_delta_histogram,
+    plot_dte_histogram,
+    plot_compliance_scorecard
 )
-from optionslab.ai_lm_studio import get_lm_studio_assistant
+from .ai_openai import get_openai_assistant
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -72,22 +75,10 @@ def get_available_strategies():
     """Get available strategy configurations"""
     strategies = []
     
-    # Check parent directory for simple strategies
+    # Check parent directory for the main strategy
     simple_strategy = Path(__file__).parent.parent / "simple_test_strategy.yaml"
     if simple_strategy.exists():
-        strategies.append(("🎯 Simple Long Call Test", str(simple_strategy)))
-    
-    # Check for advanced strategy
-    advanced_strategy = Path(__file__).parent.parent / "advanced_test_strategy.yaml"
-    if advanced_strategy.exists():
-        strategies.append(("🚀 Advanced Long Call (Delta/DTE/Liquidity)", str(advanced_strategy)))
-    
-    # Check config/strategies directory
-    strategies_dir = Path(__file__).parent.parent / "config" / "strategies"
-    if strategies_dir.exists():
-        for yaml_file in strategies_dir.glob("*.yaml"):
-            name = yaml_file.stem.replace('_', ' ').title()
-            strategies.append((f"📋 {name}", str(yaml_file)))
+        strategies.append(("🎯 Simple Long Call Strategy", str(simple_strategy)))
     
     return strategies if strategies else [("❌ No strategies found", None)]
 
@@ -203,7 +194,8 @@ def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str,
         'total_trades': len(trades_df),
         'win_rate': results.get('win_rate', 0),
         'json_path': str(json_path),  # Add path to metadata
-        'csv_path': str(csv_path)
+        'csv_path': str(csv_path),
+        'compliance_scorecard': results.get('compliance_scorecard', {})  # Add compliance scorecard
     }
     
     # Convert DataFrame to dict and handle timestamps
@@ -394,6 +386,9 @@ def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date
             winning_trades = [t for t in completed_trades if t.get('pnl', 0) > 0]
             win_rate = (len(winning_trades) / len(completed_trades) * 100) if completed_trades else 0
             
+            # Get compliance scorecard
+            compliance_scorecard = results.get('compliance_scorecard', {})
+            
             # Create summary
             summary = f"""
 ## 📊 Backtest Results
@@ -404,6 +399,12 @@ def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date
 - **Initial Capital:** ${initial_capital:,.2f}
 - **Total Trades:** {len(completed_trades)}
 - **Win Rate:** {win_rate:.1f}%
+
+### 📋 Compliance Scorecard
+- **Overall Compliance:** {compliance_scorecard.get('overall_score', 0):.1f}%
+- **Delta Compliance:** {compliance_scorecard.get('delta_compliance', 0):.1f}%
+- **DTE Compliance:** {compliance_scorecard.get('dte_compliance', 0):.1f}%
+- **Fully Compliant Trades:** {compliance_scorecard.get('compliant_trades', 0)}/{compliance_scorecard.get('total_trades', 0)}
 """
             
             # Save results
@@ -527,7 +528,10 @@ def create_simple_interface():
                                 ("Trade Markers", "trade_markers"),
                                 ("Win/Loss Distribution", "win_loss"),
                                 ("Monthly Heatmap", "heatmap"),
-                                ("Summary Dashboard", "dashboard")
+                                ("Summary Dashboard", "dashboard"),
+                                ("Delta Histogram", "delta_histogram"),
+                                ("DTE Histogram", "dte_histogram"),
+                                ("Compliance Scorecard", "compliance_scorecard")
                             ],
                             value="pnl_curve"
                         )
@@ -538,12 +542,12 @@ def create_simple_interface():
             
             # AI Assistant Tab
             with gr.TabItem("🤖 AI Assistant", id=2):
-                # Get the singleton LM Studio assistant
-                ai_assistant = get_lm_studio_assistant()
+                # Get the singleton OpenAI assistant (will be updated when model changes)
+                ai_assistant = get_openai_assistant()
                 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("### 🔧 LM Studio Assistant")
+                        gr.Markdown("### 🤖 OpenAI Assistant")
                         
                         # Connection status
                         provider_status = gr.Markdown("")
@@ -551,13 +555,56 @@ def create_simple_interface():
                         # Check status button
                         check_status_btn = gr.Button("🔄 Check Connection", size="sm")
                         
-                        gr.Markdown("""**Requirements:**
-- LM Studio running locally
-- Model loaded in LM Studio
-- Default port: 1234""")
+                        # API Key Management Section
+                        with gr.Accordion("🔑 API Key Management", open=False):
+                            api_key_input = gr.Textbox(
+                                label="OpenAI API Key",
+                                placeholder="sk-...",
+                                type="password",
+                                interactive=True
+                            )
+                            
+                            with gr.Row():
+                                save_key_btn = gr.Button("💾 Save Key", size="sm", variant="primary")
+                                test_key_btn = gr.Button("🧪 Test Key", size="sm")
+                                delete_key_btn = gr.Button("🗑️ Delete Key", size="sm", variant="stop")
+                            
+                            key_status = gr.Markdown("")
+                        
+                        # Model Selection Section
+                        with gr.Accordion("🧠 Model Selection", open=False):
+                            model_dropdown = gr.Dropdown(
+                                choices=[
+                                    ("gpt-4o-mini - Fast and cost-effective (recommended)", "gpt-4o-mini"),
+                                    ("gpt-4o - Most capable model, higher cost", "gpt-4o"),
+                                    ("gpt-4-turbo - Balanced performance and cost", "gpt-4-turbo"),
+                                    ("gpt-3.5-turbo - Fastest and most economical", "gpt-3.5-turbo")
+                                ],
+                                value="gpt-4o-mini",
+                                label="Select AI Model",
+                                interactive=True
+                            )
+                            
+                            change_model_btn = gr.Button("🔄 Change Model", size="sm", variant="secondary")
+                            current_model_display = gr.Markdown("**Current model:** gpt-4o-mini")
                         
                         start_chat_btn = gr.Button("🤖 Start AI Chat", variant="primary", size="lg")
                         
+                        # Preset Analysis Buttons
+                        gr.Markdown("### 📊 Quick Analysis")
+                        
+                        with gr.Row():
+                            strategy_btn = gr.Button("🎯 Strategy Adherence", size="sm", variant="secondary")
+                            performance_btn = gr.Button("📈 Performance Analysis", size="sm", variant="secondary")
+                        
+                        with gr.Row():
+                            patterns_btn = gr.Button("🔍 Trade Patterns", size="sm", variant="secondary")
+                            optimize_btn = gr.Button("⚡ Optimization", size="sm", variant="secondary")
+                        
+                        with gr.Row():
+                            risk_btn = gr.Button("⚠️ Risk Assessment", size="sm", variant="secondary")
+                            code_btn = gr.Button("💻 Code Review", size="sm", variant="secondary")
+            
                     with gr.Column(scale=2):
                         gr.Markdown("### 💬 Chat")
                         chatbot = gr.Chatbot(
@@ -670,6 +717,15 @@ def create_simple_interface():
                     return plot_strategy_heatmap(trades)
                 elif chart_type == "dashboard":
                     return create_summary_dashboard(trades, metadata.get('initial_capital', 10000))
+                elif chart_type == "delta_histogram":
+                    return plot_delta_histogram(trades)
+                elif chart_type == "dte_histogram":
+                    return plot_dte_histogram(trades)
+                elif chart_type == "compliance_scorecard":
+                    # Calculate compliance scorecard from trades
+                    from .auditable_backtest import calculate_compliance_scorecard
+                    compliance_data = calculate_compliance_scorecard(trades)
+                    return plot_compliance_scorecard(compliance_data)
             except Exception as e:
                 print(f"Visualization error: {e}")
                 return None
@@ -737,28 +793,78 @@ def create_simple_interface():
             outputs=[main_chart]
         )
         
-        # LM Studio status check
-        def check_lm_studio_status():
-            """Check LM Studio connection status"""
+        # OpenAI status check
+        def check_openai_status():
+            """Check OpenAI connection status"""
             if ai_assistant.is_configured():
-                return "✅ LM Studio connected"
+                return "✅ OpenAI connected"
             else:
                 # Try to initialize
                 if ai_assistant.initialize():
-                    return "✅ LM Studio connected"
+                    return "✅ OpenAI connected"
                 else:
-                    return "❌ LM Studio not running or no model loaded"
+                    return "❌ OpenAI not configured. Please set OPENAI_API_KEY"
         
         # Initial status check
-        provider_status.value = check_lm_studio_status()
+        provider_status.value = check_openai_status()
         
         check_status_btn.click(
-            fn=check_lm_studio_status,
+            fn=check_openai_status,
             outputs=[provider_status]
         )
         
+        # API Key Management Handlers
+        def save_api_key(api_key):
+            """Save API key and test connection"""
+            if not api_key or not api_key.strip():
+                return "❌ Please enter an API key", check_openai_status()
+            
+            # Test the key first
+            if ai_assistant.test_api_key(api_key):
+                # Save and initialize
+                if ai_assistant.save_api_key(api_key):
+                    return "✅ API key saved and verified!", check_openai_status()
+                else:
+                    return "❌ Failed to save API key", check_openai_status()
+            else:
+                return "❌ Invalid API key. Please check and try again.", check_openai_status()
+        
+        def test_api_key(api_key):
+            """Test API key without saving"""
+            if not api_key or not api_key.strip():
+                return "❌ Please enter an API key"
+            
+            if ai_assistant.test_api_key(api_key):
+                return "✅ API key is valid!"
+            else:
+                return "❌ Invalid API key. Please check and try again."
+        
+        def delete_api_key():
+            """Delete stored API key"""
+            if ai_assistant.delete_api_key():
+                return "✅ API key deleted", check_openai_status(), ""
+            else:
+                return "❌ Failed to delete API key", check_openai_status(), ""
+        
+        save_key_btn.click(
+            fn=save_api_key,
+            inputs=[api_key_input],
+            outputs=[key_status, provider_status]
+        )
+        
+        test_key_btn.click(
+            fn=test_api_key,
+            inputs=[api_key_input],
+            outputs=[key_status]
+        )
+        
+        delete_key_btn.click(
+            fn=delete_api_key,
+            outputs=[key_status, provider_status, api_key_input]
+        )
+        
         def start_ai_chat(backtest_data):
-            """Start AI conversation with initial greeting and options"""
+            """Start AI conversation with initial greeting and preset analysis options"""
             if not ai_assistant.is_configured():
                 return [{"role": "assistant", "content": "❌ AI not configured. Please set API key."}]
             
@@ -766,22 +872,6 @@ def create_simple_interface():
                 return [{"role": "assistant", "content": "❌ No backtest selected. Please select a backtest from the dropdown above."}]
             
             metadata = backtest_data.get('metadata', {})
-            # Check what data is available
-            csv_path = metadata.get('json_path', '').replace('.json', '.csv') if metadata.get('json_path') else None
-            has_csv = csv_path and Path(csv_path).exists()
-            strategy_name = metadata.get('strategy', '')
-            yaml_paths = [
-                Path(__file__).parent.parent / f"{strategy_name}.yaml",
-                Path(__file__).parent.parent / "config" / "strategies" / f"{strategy_name}.yaml",
-            ]
-            has_yaml = any(path.exists() for path in yaml_paths) if strategy_name else False
-            
-            # Check for additional data sources
-            data_dir = Path(__file__).parent / "data"
-            has_historical_data = data_dir.exists() and list(data_dir.glob("*.parquet"))
-            
-            results_dir = Path(__file__).parent.parent / "results" / "backtests"
-            num_previous_backtests = len(list(results_dir.glob("*.json"))) if results_dir.exists() else 0
             
             greeting = f"""👋 Hello! I'm your AI Trading Assistant, ready to analyze your backtest.
 
@@ -790,32 +880,22 @@ def create_simple_interface():
 - Total Trades: {metadata.get('total_trades', 0)}
 - Win Rate: {metadata.get('win_rate', 0):.1%}
 
-**📊 Data I Have Access To:**
-✅ Backtest metadata (returns, dates, capital)
-✅ Trade-by-trade data ({"CSV with full details" if has_csv else "JSON summary only"})
-✅ Strategy configuration ({"YAML file found" if has_yaml else "Not found - using metadata"})
-✅ Entry/exit prices and dates
-✅ P&L for each trade
-✅ Exit reasons
-✅ Position sizes
-{"✅ Historical SPY options data (2020-2025)" if has_historical_data else "❌ Historical options data not found"}
-{"✅ " + str(num_previous_backtests) + " previous backtest results for comparison" if num_previous_backtests > 0 else "❌ No previous backtests found"}
-✅ Trade log documentation and guides
+**📊 Quick Analysis Options:**
+1. **Strategy Adherence** - Check if trades follow the strategy rules
+2. **Performance Analysis** - Deep dive into returns, risk metrics, and patterns
+3. **Trade Pattern Analysis** - Analyze winning vs losing trade characteristics
+4. **Risk Assessment** - Evaluate drawdowns, volatility, and risk management
+5. **Optimization Suggestions** - Find parameter improvements
+6. **Code Review** - Analyze strategy implementation and suggest fixes
+7. **Custom Analysis** - Ask me anything specific about your backtest
 
-**❌ Data I Don't Have (but would enhance analysis):**
-- Market data during trades (SPY, VIX levels)
-- Greeks evolution over trade lifetime
-- Intraday price movements
-- Implied volatility history
-- Broader market context
-- Real-time data access
-
-**💡 I can best help with:**
-- Analyzing win/loss patterns
-- Calculating risk metrics (Sharpe, Sortino)
-- Finding parameter optimization opportunities
-- Validating strategy adherence
-- Identifying exit reason effectiveness
+**💡 I have access to:**
+- Complete trade-by-trade data with Greeks and IV
+- Strategy configuration files
+- Historical market data
+- Documentation and guides
+- Previous backtest results
+- **READ-ONLY codebase access** (Python files, configs)
 
 What would you like to explore?"""
             
@@ -827,7 +907,7 @@ What would you like to explore?"""
             
             if not ai_assistant.is_configured():
                 chat_history.append({"role": "user", "content": message})
-                chat_history.append({"role": "assistant", "content": "❌ LM Studio not connected. Please check connection."})
+                chat_history.append({"role": "assistant", "content": "❌ OpenAI not connected. Please check API key."})
                 return chat_history, ""
             
             if not backtest_data:
@@ -839,7 +919,7 @@ What would you like to explore?"""
             chat_history.append({"role": "user", "content": message})
             
             try:
-                print("[DEBUG] Sending request to LM Studio...")
+                print("[DEBUG] Sending request to OpenAI...")
                 
                 # Add a processing message
                 processing_msg = {"role": "assistant", "content": "🤔 Processing your request..."}
@@ -853,7 +933,7 @@ What would you like to explore?"""
                 
                 # Validate response
                 if response is None:
-                    response = "❌ No response received from LM Studio. Please check if the model is loaded."
+                    response = "❌ No response received from OpenAI. Please check your API key."
                 elif not isinstance(response, str):
                     response = str(response)
                 elif response.strip() == "":
@@ -872,7 +952,7 @@ What would you like to explore?"""
                 if chat_history and chat_history[-1]["content"] == "🤔 Processing your request...":
                     chat_history = chat_history[:-1]
                 
-                error_msg = f"❌ Error: {str(e)}\n\nPlease check:\n1. LM Studio is running\n2. A model is loaded\n3. The model is responding"
+                error_msg = f"❌ Error: {str(e)}\n\nPlease check:\n1. OPENAI_API_KEY is set\n2. API key is valid\n3. You have API credits"
                 chat_history.append({"role": "assistant", "content": error_msg})
             
             print(f"[DEBUG] Returning {len(chat_history)} messages")
@@ -897,6 +977,135 @@ What would you like to explore?"""
             fn=chat_with_ai,
             inputs=[msg_input, chatbot, selected_backtest_data],
             outputs=[chatbot, msg_input]
+        )
+        
+        # Preset Analysis Button Handlers
+        def run_strategy_analysis(backtest_data, chat_history):
+            """Run strategy adherence analysis"""
+            if not backtest_data:
+                chat_history.append({"role": "assistant", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history
+            
+            chat_history.append({"role": "user", "content": "Analyze strategy adherence"})
+            current_assistant = get_openai_assistant()
+            response = current_assistant.analyze_strategy_adherence(backtest_data)
+            chat_history.append({"role": "assistant", "content": response})
+            return chat_history
+        
+        def run_performance_analysis(backtest_data, chat_history):
+            """Run performance analysis"""
+            if not backtest_data:
+                chat_history.append({"role": "user", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history
+            
+            chat_history.append({"role": "user", "content": "Analyze performance metrics"})
+            current_assistant = get_openai_assistant()
+            response = current_assistant.analyze_performance(backtest_data)
+            chat_history.append({"role": "assistant", "content": response})
+            return chat_history
+        
+        def run_pattern_analysis(backtest_data, chat_history):
+            """Run trade pattern analysis"""
+            if not backtest_data:
+                chat_history.append({"role": "assistant", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history
+            
+            chat_history.append({"role": "user", "content": "Analyze trade patterns"})
+            current_assistant = get_openai_assistant()
+            response = current_assistant.analyze_trade_patterns(backtest_data)
+            chat_history.append({"role": "assistant", "content": response})
+            return chat_history
+        
+        def run_optimization_analysis(backtest_data, chat_history):
+            """Run optimization suggestions"""
+            if not backtest_data:
+                chat_history.append({"role": "assistant", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history
+            
+            chat_history.append({"role": "user", "content": "Suggest optimizations"})
+            current_assistant = get_openai_assistant()
+            response = current_assistant.suggest_optimizations(backtest_data)
+            chat_history.append({"role": "assistant", "content": response})
+            return chat_history
+        
+        def run_risk_analysis(backtest_data, chat_history):
+            """Run risk assessment"""
+            if not backtest_data:
+                chat_history.append({"role": "assistant", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history
+            
+            chat_history.append({"role": "user", "content": "Analyze risk metrics and drawdowns"})
+            current_assistant = get_openai_assistant()
+            response = current_assistant.chat("Analyze risk metrics, drawdowns, and risk management effectiveness", backtest_data)
+            chat_history.append({"role": "assistant", "content": response})
+            return chat_history
+        
+        def run_code_analysis(backtest_data, chat_history):
+            """Run code review"""
+            if not backtest_data:
+                chat_history.append({"role": "assistant", "content": "❌ No backtest selected. Please select a backtest first."})
+                return chat_history
+            
+            chat_history.append({"role": "user", "content": "Review strategy implementation and suggest code improvements"})
+            current_assistant = get_openai_assistant()
+            response = current_assistant.chat("Review the strategy implementation, identify any code issues, and suggest improvements", backtest_data)
+            chat_history.append({"role": "assistant", "content": response})
+            return chat_history
+        
+        # Connect preset analysis buttons
+        strategy_btn.click(
+            fn=run_strategy_analysis,
+            inputs=[selected_backtest_data, chatbot],
+            outputs=[chatbot]
+        )
+        
+        performance_btn.click(
+            fn=run_performance_analysis,
+            inputs=[selected_backtest_data, chatbot],
+            outputs=[chatbot]
+        )
+        
+        patterns_btn.click(
+            fn=run_pattern_analysis,
+            inputs=[selected_backtest_data, chatbot],
+            outputs=[chatbot]
+        )
+        
+        optimize_btn.click(
+            fn=run_optimization_analysis,
+            inputs=[selected_backtest_data, chatbot],
+            outputs=[chatbot]
+        )
+        
+        risk_btn.click(
+            fn=run_risk_analysis,
+            inputs=[selected_backtest_data, chatbot],
+            outputs=[chatbot]
+        )
+        
+        code_btn.click(
+            fn=run_code_analysis,
+            inputs=[selected_backtest_data, chatbot],
+            outputs=[chatbot]
+        )
+        
+        def change_ai_model(model_name):
+            """Change the AI model"""
+            try:
+                # Get fresh assistant instance with new model
+                new_assistant = get_openai_assistant(model_name)
+                if new_assistant.is_configured():
+                    return f"✅ Model changed to: {model_name}"
+                else:
+                    return f"❌ Failed to change model to: {model_name}"
+            except Exception as e:
+                return f"❌ Error changing model: {str(e)}"
+        
+        # Connect model change button
+        change_model_btn.click(
+            fn=change_ai_model,
+            inputs=[model_dropdown],
+            outputs=[current_model_display]
         )
         
         delete_btn.click(
