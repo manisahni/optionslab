@@ -3,7 +3,7 @@
 Test script for put option support
 """
 
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 
 def test_long_put_strategy():
     """Test long put strategy implementation"""
@@ -55,11 +55,12 @@ def test_basic_put_selection():
     print("TEST: Basic Put Option Selection")
     print("="*60)
     
-    from auditable_backtest import load_and_audit_data, find_suitable_options
+    from optionslab.data_loader import load_data
+    from optionslab.option_selector import find_suitable_options
     
     # Load a single day of data
     data_file = "spy_options_downloader/spy_options_parquet/spy_options_eod_20220815.parquet"
-    data = load_and_audit_data(data_file)
+    data = load_data(data_file, "2022-08-15", "2022-08-15")
     
     if data is not None:
         data['strike_dollars'] = data['strike'] / 1000.0

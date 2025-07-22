@@ -3,7 +3,7 @@
 Test script for profit target and stop loss exits
 """
 
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 from datetime import datetime, timedelta
 
 def test_profit_stop_exits():

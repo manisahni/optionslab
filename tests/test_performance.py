@@ -7,7 +7,7 @@ Tests execution time and memory usage with large datasets
 import time
 import psutil
 import os
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 
 def get_memory_usage():
     """Get current memory usage in MB"""

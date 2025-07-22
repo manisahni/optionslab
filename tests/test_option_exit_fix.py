@@ -3,7 +3,7 @@
 Test script to verify option exit pricing fix
 """
 
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 
 def test_option_exit_pricing():
     """Test that options exit at correct prices, not $0"""

@@ -266,7 +266,7 @@ Keep responses concise and focused on compliance metrics. Use the compliance_sco
             scorecard = backtest_data['compliance_scorecard']
         # Otherwise calculate it from trades
         elif 'trades' in backtest_data:
-            from .auditable_backtest import calculate_compliance_scorecard
+            from .backtest_metrics import calculate_compliance_scorecard
             scorecard = calculate_compliance_scorecard(backtest_data['trades'])
         
         if scorecard:

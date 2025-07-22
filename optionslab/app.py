@@ -19,14 +19,11 @@ import random
 import uuid
 from typing import List, Dict, Optional, Tuple
 
-# Import our auditable backtest functions
-from .auditable_backtest import (
-    load_and_audit_data,
-    audit_strategy_config,
-    find_suitable_options,
-    calculate_position_size,
-    run_auditable_backtest
-)
+# Import our backtest engine and modules
+from .backtest_engine import run_auditable_backtest
+from .option_selector import find_suitable_options, calculate_position_size
+from .data_loader import load_strategy_config
+from .backtest_metrics import calculate_compliance_scorecard
 
 # Import visualization and AI modules
 from .visualization import (
@@ -723,7 +720,7 @@ def create_simple_interface():
                     return plot_dte_histogram(trades)
                 elif chart_type == "compliance_scorecard":
                     # Calculate compliance scorecard from trades
-                    from .auditable_backtest import calculate_compliance_scorecard
+                    from .backtest_metrics import calculate_compliance_scorecard
                     compliance_data = calculate_compliance_scorecard(trades)
                     return plot_compliance_scorecard(compliance_data)
             except Exception as e:

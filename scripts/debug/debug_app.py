@@ -30,8 +30,8 @@ for module in modules_to_test:
 
 print("\nTesting local imports:")
 try:
-    from optionslab.auditable_backtest import run_auditable_backtest
-    print("✅ auditable_backtest - OK")
+    from optionslab.backtest_engine import run_auditable_backtest
+    print("✅ backtest_engine - OK")
 except Exception as e:
     print(f"❌ auditable_backtest - FAILED: {e}")
     traceback.print_exc()

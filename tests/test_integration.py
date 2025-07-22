@@ -13,10 +13,10 @@ print("=" * 50)
 # Test 1: Check if all modules can be imported
 print("\n📦 Testing module imports...")
 try:
-    from optionslab.auditable_backtest import run_auditable_backtest
-    print("✅ auditable_backtest imported successfully")
+    from optionslab.backtest_engine import run_auditable_backtest
+    print("✅ backtest_engine imported successfully")
 except Exception as e:
-    print(f"❌ Failed to import auditable_backtest: {e}")
+    print(f"❌ Failed to import backtest_engine: {e}")
 
 try:
     from optionslab.visualization import plot_pnl_curve, plot_trade_markers

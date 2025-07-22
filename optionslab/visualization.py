@@ -12,6 +12,161 @@ import numpy as np
 from datetime import datetime
 from typing import List, Dict, Optional
 import json
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.gridspec import GridSpec
+from pathlib import Path
+import traceback
+
+
+def create_backtest_charts(results, export_dir='backtest_results'):
+    """Create visualization charts for backtest results"""
+    try:
+        # Create export directory if it doesn't exist
+        Path(export_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Generate timestamp for unique filenames
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        strategy_name = results['config']['name'].replace(' ', '_').lower()
+        
+        # Convert equity curve to DataFrame
+        equity_df = pd.DataFrame(results['equity_curve'])
+        equity_df['date'] = pd.to_datetime(equity_df['date'])
+        
+        # Create figure with subplots
+        fig = plt.figure(figsize=(15, 12))
+        gs = GridSpec(4, 2, figure=fig, hspace=0.3, wspace=0.3)
+        
+        # 1. Equity Curve
+        ax1 = fig.add_subplot(gs[0, :])
+        ax1.plot(equity_df['date'], equity_df['total_value'], 'b-', linewidth=2, label='Total Value')
+        ax1.plot(equity_df['date'], equity_df['cash'], 'g--', linewidth=1, label='Cash')
+        ax1.axhline(y=results['initial_capital'], color='r', linestyle=':', label='Initial Capital')
+        ax1.set_title(f"{results['config']['name']} - Equity Curve", fontsize=14, fontweight='bold')
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel('Portfolio Value ($)')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45)
+        
+        # 2. Drawdown
+        ax2 = fig.add_subplot(gs[1, :])
+        # Calculate drawdown
+        rolling_max = equity_df['total_value'].expanding().max()
+        drawdown = (equity_df['total_value'] - rolling_max) / rolling_max * 100
+        ax2.fill_between(equity_df['date'], drawdown, 0, color='red', alpha=0.3)
+        ax2.plot(equity_df['date'], drawdown, 'r-', linewidth=1)
+        ax2.set_title('Drawdown (%)', fontsize=12, fontweight='bold')
+        ax2.set_xlabel('Date')
+        ax2.set_ylabel('Drawdown %')
+        ax2.grid(True, alpha=0.3)
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45)
+        
+        # 3. Trade P&L Distribution
+        ax3 = fig.add_subplot(gs[2, 0])
+        completed_trades = [t for t in results['trades'] if 'pnl' in t]
+        if completed_trades:
+            pnls = [t['pnl'] for t in completed_trades]
+            colors = ['green' if pnl > 0 else 'red' for pnl in pnls]
+            bars = ax3.bar(range(len(pnls)), pnls, color=colors, alpha=0.7)
+            ax3.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+            ax3.set_title('Trade P&L', fontsize=12, fontweight='bold')
+            ax3.set_xlabel('Trade Number')
+            ax3.set_ylabel('P&L ($)')
+            ax3.grid(True, alpha=0.3)
+            
+            # Add average line
+            avg_pnl = np.mean(pnls)
+            ax3.axhline(y=avg_pnl, color='blue', linestyle='--', label=f'Avg: ${avg_pnl:.2f}')
+            ax3.legend()
+        
+        # 4. Win/Loss Statistics
+        ax4 = fig.add_subplot(gs[2, 1])
+        if completed_trades:
+            wins = sum(1 for t in completed_trades if t['pnl'] > 0)
+            losses = sum(1 for t in completed_trades if t['pnl'] <= 0)
+            
+            # Pie chart
+            sizes = [wins, losses]
+            labels = [f'Wins ({wins})', f'Losses ({losses})']
+            colors = ['green', 'red']
+            explode = (0.1, 0)  # explode wins slice
+            
+            ax4.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
+                    shadow=True, startangle=90)
+            ax4.set_title('Win/Loss Distribution', fontsize=12, fontweight='bold')
+        
+        # 5. Position Count Over Time
+        ax5 = fig.add_subplot(gs[3, 0])
+        ax5.plot(equity_df['date'], equity_df['positions'], 'b-', linewidth=2, marker='o', markersize=4)
+        ax5.set_title('Active Positions Over Time', fontsize=12, fontweight='bold')
+        ax5.set_xlabel('Date')
+        ax5.set_ylabel('Number of Positions')
+        ax5.grid(True, alpha=0.3)
+        ax5.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        plt.setp(ax5.xaxis.get_majorticklabels(), rotation=45)
+        
+        # 6. Exit Reasons
+        ax6 = fig.add_subplot(gs[3, 1])
+        if completed_trades:
+            exit_reasons = {}
+            for trade in completed_trades:
+                reason = trade.get('exit_reason', 'unknown')
+                # Simplify exit reason
+                if 'profit target' in reason:
+                    reason = 'Profit Target'
+                elif 'stop loss' in reason:
+                    reason = 'Stop Loss'
+                elif 'time stop' in reason:
+                    reason = 'Time Stop'
+                elif 'delta stop' in reason:
+                    reason = 'Delta Stop'
+                elif 'RSI exit' in reason:
+                    reason = 'RSI Exit'
+                elif 'BB exit' in reason:
+                    reason = 'BB Exit'
+                else:
+                    reason = 'Other'
+                
+                exit_reasons[reason] = exit_reasons.get(reason, 0) + 1
+            
+            # Bar chart
+            reasons = list(exit_reasons.keys())
+            counts = list(exit_reasons.values())
+            bars = ax6.bar(reasons, counts, color='skyblue', alpha=0.7)
+            ax6.set_title('Exit Reasons', fontsize=12, fontweight='bold')
+            ax6.set_xlabel('Exit Type')
+            ax6.set_ylabel('Count')
+            ax6.grid(True, alpha=0.3, axis='y')
+            plt.setp(ax6.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Add count labels on bars
+            for bar, count in zip(bars, counts):
+                ax6.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                        str(count), ha='center', va='bottom')
+        
+        # Add overall title and metrics
+        fig.suptitle(f"Backtest Results: {results['config']['name']}\n" +
+                    f"Period: {results['start_date']} to {results['end_date']} | " +
+                    f"Return: {results['total_return']:.2%} | " +
+                    f"Sharpe: {results.get('sharpe_ratio', 0):.2f} | " +
+                    f"Max DD: {results.get('max_drawdown', 0):.2%}",
+                    fontsize=16, fontweight='bold')
+        
+        # Save the figure
+        chart_file = Path(export_dir) / f"{strategy_name}_charts_{timestamp}.png"
+        plt.tight_layout()
+        plt.savefig(chart_file, dpi=300, bbox_inches='tight')
+        print(f"✅ AUDIT: Charts saved to {chart_file}")
+        
+        # Close the figure to free memory
+        plt.close()
+        
+    except Exception as e:
+        print(f"⚠️ AUDIT: Error creating charts: {e}")
+        traceback.print_exc()
 
 
 def plot_pnl_curve(trades: List[Dict], initial_capital: float = 10000) -> go.Figure:

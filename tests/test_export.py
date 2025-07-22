@@ -3,7 +3,7 @@
 Test export functionality
 """
 
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 import yaml
 import os
 from pathlib import Path

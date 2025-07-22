@@ -114,12 +114,24 @@ def main():
     
     # Define all test files
     tests = [
-        # Basic feature tests
+        # Module-specific tests
+        ("Backtest Engine", "test_backtest_engine.py"),
+        ("Option Selector", "test_option_selector.py"),
+        ("Data Loader", "test_data_loader.py"),
+        ("Backtest Metrics", "test_backtest_metrics.py"),
+        ("Market Filters", "test_market_filters.py"),
+        ("Greek Tracker", "test_greek_tracker.py"),
+        ("Trade Recorder", "test_trade_recorder.py"),
+        ("Exit Conditions", "test_exit_conditions.py"),
+        
+        # Integration tests
         ("Multi-Day Backtest", "test_multiday_backtest.py"),
         ("Option Exit Pricing", "test_option_exit_fix.py"),
         ("Profit/Stop Exits", "test_profit_stop_exits.py"),
         ("Put Option Support", "test_put_options.py"),
         ("Multiple Positions", "test_multi_positions.py"),
+        ("Integration Tests", "test_integration.py"),
+        ("Gradio Interface", "test_gradio_backtest.py"),
     ]
     
     # Check which test files exist

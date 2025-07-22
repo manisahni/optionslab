@@ -11,7 +11,7 @@ sys.path.insert(0, '.')
 
 # Run the backtest with full traceback
 try:
-    from auditable_gradio_app_simple import run_auditable_backtest_gradio
+    from optionslab.app import run_auditable_backtest_gradio
     
     # Test with sample inputs
     data_file = "../spy_options_downloader/spy_options_parquet/SPY_OPTIONS_2022_COMPLETE.parquet"

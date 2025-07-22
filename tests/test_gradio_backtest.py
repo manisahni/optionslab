@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'optionslab'))
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 from auditable_gradio_app import format_trades_dataframe
 import pandas as pd
 from datetime import datetime

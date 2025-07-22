@@ -3,7 +3,7 @@
 Test script for multiple concurrent positions support
 """
 
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 
 def test_multi_positions():
     """Test multiple concurrent positions functionality"""

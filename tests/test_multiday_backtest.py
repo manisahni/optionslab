@@ -5,7 +5,7 @@ This script tests various aspects of multi-day backtesting to ensure it works co
 """
 
 import sys
-from auditable_backtest import run_auditable_backtest
+from optionslab.backtest_engine import run_auditable_backtest
 import json
 
 def test_basic_multiday():
