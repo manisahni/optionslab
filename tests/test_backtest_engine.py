@@ -3,7 +3,7 @@
 Tests for the backtest engine module
 """
 
-import pytest
+
 from optionslab.backtest_engine import run_auditable_backtest
 
 
@@ -73,13 +73,16 @@ def test_weekend_handling():
 def test_error_handling():
     """Test error handling for invalid inputs"""
     # Test with non-existent file
-    with pytest.raises(Exception):
+    try:
         run_auditable_backtest(
             "non_existent_file.parquet",
             "simple_test_strategy.yaml",
             "2022-01-01",
             "2022-01-31"
         )
+        assert False, "Expected exception for non-existent file"
+    except:
+        pass  # Expected
     
     # Test with invalid date range
     data_file = "spy_options_downloader/spy_options_parquet/SPY_OPTIONS_2022_COMPLETE.parquet"

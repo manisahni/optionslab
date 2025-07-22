@@ -11,6 +11,7 @@ from optionslab.trade_recorder import Position
 def test_exit_conditions_initialization():
     """Test exit conditions initialization"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'profit_target': 0.5,      # 50% profit
@@ -35,6 +36,7 @@ def test_exit_conditions_initialization():
 def test_profit_target_exit():
     """Test profit target exit condition"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'profit_target': 0.5  # 50% profit
@@ -83,6 +85,7 @@ def test_profit_target_exit():
 def test_stop_loss_exit():
     """Test stop loss exit condition"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'stop_loss': -0.2  # 20% loss
@@ -131,6 +134,7 @@ def test_stop_loss_exit():
 def test_dte_threshold_exit():
     """Test DTE threshold exit condition"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'dte_threshold': 21  # Exit at 21 DTE
@@ -179,6 +183,7 @@ def test_dte_threshold_exit():
 def test_delta_threshold_exit():
     """Test delta threshold exit condition"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'delta_threshold': 0.7  # Exit if delta exceeds 0.7
@@ -227,6 +232,7 @@ def test_delta_threshold_exit():
 def test_max_days_in_trade_exit():
     """Test maximum days in trade exit condition"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'max_days_in_trade': 30  # Maximum 30 days
@@ -276,6 +282,7 @@ def test_exit_priority_order():
     """Test that exit conditions are checked in proper priority order"""
     # This test is from test_profit_stop_exits.py
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {
                 'profit_target': 0.5,
@@ -315,6 +322,7 @@ def test_exit_priority_order():
 def test_expiration_exit():
     """Test automatic exit at expiration"""
     config = {
+        'parameters': {'max_hold_days': 30},
         'strategy': {
             'exit_conditions': {}  # No specific conditions
         }

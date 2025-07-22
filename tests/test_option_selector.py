@@ -76,18 +76,18 @@ def test_calculate_position_size():
     option_price = 2.50
     position_size_pct = 0.05  # 5% of capital
     
-    contracts = calculate_position_size(cash, option_price, position_size_pct)
+    contracts, cost = calculate_position_size(cash, option_price, position_size_pct)
     
     # Should be 2 contracts: 10000 * 0.05 / (2.50 * 100) = 2
     assert contracts == 2
     
     # Test with max contracts limit
-    contracts = calculate_position_size(cash, option_price, position_size_pct, max_contracts=1)
+    contracts, cost = calculate_position_size(cash, option_price, position_size_pct, max_contracts=1)
     assert contracts == 1
     
     # Test with very expensive option
     expensive_option = 50.0
-    contracts = calculate_position_size(cash, expensive_option, position_size_pct)
+    contracts, cost = calculate_position_size(cash, expensive_option, position_size_pct)
     assert contracts == 0  # Can't afford even 1 contract
 
 

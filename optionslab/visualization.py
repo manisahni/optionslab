@@ -554,17 +554,26 @@ def plot_strategy_heatmap(trades: List[Dict]) -> go.Figure:
 
 
 def plot_delta_histogram(trades: List[Dict]) -> go.Figure:
-    """Plot histogram of actual delta values vs target bands"""
+    """Plot enhanced histogram of actual delta values vs target bands"""
     if not trades:
         return go.Figure().add_annotation(text="No trades to display", showarrow=False)
     
     # Extract delta data
     deltas = []
     targets = []
+    compliant_deltas = []
+    non_compliant_deltas = []
     
     for trade in trades:
         if 'delta_actual' in trade and trade['delta_actual'] is not None:
-            deltas.append(trade['delta_actual'])
+            delta = abs(trade['delta_actual'])  # Use absolute value
+            deltas.append(delta)
+            
+            if trade.get('delta_compliant', False):
+                compliant_deltas.append(delta)
+            else:
+                non_compliant_deltas.append(delta)
+                
             if 'delta_target' in trade:
                 targets.append(trade['delta_target'])
     
@@ -574,55 +583,108 @@ def plot_delta_histogram(trades: List[Dict]) -> go.Figure:
     # Create figure
     fig = go.Figure()
     
-    # Add histogram
+    # Get target and tolerance
+    target = targets[0] if targets else 0.30
+    tolerance = trades[0].get('delta_tolerance', 0.05) if trades else 0.05
+    
+    # Add shaded target zone
+    fig.add_vrect(
+        x0=target - tolerance,
+        x1=target + tolerance,
+        fillcolor="green",
+        opacity=0.2,
+        annotation_text="Target Zone",
+        annotation_position="top",
+        annotation=dict(font=dict(size=12, color="green"))
+    )
+    
+    # Add histogram with custom bins to align with target zone
+    bin_size = 0.025
+    bins = [i * bin_size for i in range(int(1/bin_size) + 1)]
+    
+    # Color bars based on compliance
+    colors = []
+    for i in range(len(bins) - 1):
+        bin_center = (bins[i] + bins[i+1]) / 2
+        if target - tolerance <= bin_center <= target + tolerance:
+            colors.append('green')
+        else:
+            colors.append('red')
+    
     fig.add_trace(go.Histogram(
         x=deltas,
         name='Actual Delta',
-        nbinsx=20,
+        xbins=dict(start=0, end=1, size=bin_size),
         marker_color='blue',
         opacity=0.7
     ))
     
-    # Add target band if available
-    if targets:
-        target = targets[0]  # Assuming same target for all trades
-        tolerance = trades[0].get('delta_tolerance', 0.05)
-        
-        # Add vertical lines for target band
-        fig.add_vline(x=target - tolerance, line_dash="dash", line_color="red", 
-                      annotation_text=f"Min: {target-tolerance:.2f}")
-        fig.add_vline(x=target, line_dash="solid", line_color="green", 
-                      annotation_text=f"Target: {target:.2f}")
-        fig.add_vline(x=target + tolerance, line_dash="dash", line_color="red", 
-                      annotation_text=f"Max: {target+tolerance:.2f}")
+    # Add mean and median lines
+    mean_delta = np.mean(deltas)
+    median_delta = np.median(deltas)
     
-    # Calculate compliance percentage
-    compliant = sum(1 for t in trades if t.get('delta_compliant', False))
-    total = len([t for t in trades if 'delta_actual' in t and t['delta_actual'] is not None])
-    compliance_pct = (compliant / total * 100) if total > 0 else 0
+    fig.add_vline(x=mean_delta, line_dash="dash", line_color="purple", 
+                  annotation_text=f"Mean: {mean_delta:.3f}")
+    fig.add_vline(x=median_delta, line_dash="dot", line_color="orange", 
+                  annotation_text=f"Median: {median_delta:.3f}")
+    
+    # Calculate statistics
+    std_delta = np.std(deltas)
+    compliance_pct = (len(compliant_deltas) / len(deltas) * 100) if deltas else 0
+    
+    # Add statistics box
+    stats_text = f"""<b>Statistics:</b>
+    Mean: {mean_delta:.3f}
+    Median: {median_delta:.3f}
+    Std Dev: {std_delta:.3f}
+    Target: {target:.2f} ± {tolerance:.2f}
+    Compliance: {compliance_pct:.1f}%
+    Total Trades: {len(deltas)}"""
+    
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=0.98, y=0.98,
+        text=stats_text,
+        showarrow=False,
+        bordercolor="black",
+        borderwidth=1,
+        bgcolor="white",
+        align="left",
+        xanchor="right",
+        yanchor="top"
+    )
     
     fig.update_layout(
-        title=f'Delta Distribution - {compliance_pct:.1f}% Compliant',
+        title=f'Delta Distribution - {compliance_pct:.1f}% Compliant<br><sub>Green zone = Target range</sub>',
         xaxis_title='Delta',
         yaxis_title='Count',
         showlegend=True,
-        template='plotly_white'
+        template='plotly_white',
+        height=500
     )
     
     return fig
 
 
 def plot_dte_histogram(trades: List[Dict]) -> go.Figure:
-    """Plot histogram of actual DTE values vs target bands"""
+    """Plot enhanced histogram of actual DTE values vs target bands"""
     if not trades:
         return go.Figure().add_annotation(text="No trades to display", showarrow=False)
     
     # Extract DTE data
     dtes = []
+    compliant_dtes = []
+    non_compliant_dtes = []
     
     for trade in trades:
         if 'dte_actual' in trade:
-            dtes.append(trade['dte_actual'])
+            dte = trade['dte_actual']
+            dtes.append(dte)
+            
+            if trade.get('dte_compliant', False):
+                compliant_dtes.append(dte)
+            else:
+                non_compliant_dtes.append(dte)
     
     if not dtes:
         return go.Figure().add_annotation(text="No DTE data available", showarrow=False)
@@ -630,40 +692,81 @@ def plot_dte_histogram(trades: List[Dict]) -> go.Figure:
     # Create figure
     fig = go.Figure()
     
-    # Add histogram
+    # Get target range
+    dte_min = trades[0].get('dte_min', 30) if trades else 30
+    dte_max = trades[0].get('dte_max', 60) if trades else 60
+    dte_target = trades[0].get('dte_target', 45) if trades else 45
+    
+    # Add shaded target zone
+    fig.add_vrect(
+        x0=dte_min,
+        x1=dte_max,
+        fillcolor="blue",
+        opacity=0.2,
+        annotation_text="Target Zone",
+        annotation_position="top",
+        annotation=dict(font=dict(size=12, color="blue"))
+    )
+    
+    # Add histogram with appropriate bins
+    bin_size = 5  # 5-day bins
+    min_dte = min(dtes + [0])
+    max_dte = max(dtes + [90])
+    bins = list(range(0, int(max_dte) + bin_size, bin_size))
+    
     fig.add_trace(go.Histogram(
         x=dtes,
         name='Actual DTE',
-        nbinsx=20,
+        xbins=dict(start=0, end=max_dte, size=bin_size),
         marker_color='purple',
         opacity=0.7
     ))
     
-    # Add target band
-    if trades and 'dte_min' in trades[0]:
-        dte_min = trades[0]['dte_min']
-        dte_max = trades[0]['dte_max']
-        dte_target = trades[0].get('dte_target', (dte_min + dte_max) / 2)
-        
-        # Add vertical lines for target band
-        fig.add_vline(x=dte_min, line_dash="dash", line_color="red", 
-                      annotation_text=f"Min: {dte_min}")
-        fig.add_vline(x=dte_target, line_dash="solid", line_color="green", 
-                      annotation_text=f"Target: {dte_target}")
-        fig.add_vline(x=dte_max, line_dash="dash", line_color="red", 
-                      annotation_text=f"Max: {dte_max}")
+    # Add mean and median lines
+    mean_dte = np.mean(dtes)
+    median_dte = np.median(dtes)
     
-    # Calculate compliance percentage
-    compliant = sum(1 for t in trades if t.get('dte_compliant', False))
-    total = len(trades)
-    compliance_pct = (compliant / total * 100) if total > 0 else 0
+    fig.add_vline(x=mean_dte, line_dash="dash", line_color="purple", 
+                  annotation_text=f"Mean: {mean_dte:.1f}")
+    fig.add_vline(x=median_dte, line_dash="dot", line_color="orange", 
+                  annotation_text=f"Median: {median_dte:.0f}")
+    fig.add_vline(x=dte_target, line_dash="solid", line_color="green", 
+                  annotation_text=f"Target: {dte_target}")
+    
+    # Calculate statistics
+    std_dte = np.std(dtes)
+    compliance_pct = (len(compliant_dtes) / len(dtes) * 100) if dtes else 0
+    
+    # Add statistics box
+    stats_text = f"""<b>Statistics:</b>
+    Mean: {mean_dte:.1f}
+    Median: {median_dte:.0f}
+    Std Dev: {std_dte:.1f}
+    Target: {dte_min}-{dte_max} days
+    Compliance: {compliance_pct:.1f}%
+    Total Trades: {len(dtes)}"""
+    
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=0.98, y=0.98,
+        text=stats_text,
+        showarrow=False,
+        bordercolor="black",
+        borderwidth=1,
+        bgcolor="white",
+        align="left",
+        xanchor="right",
+        yanchor="top"
+    )
     
     fig.update_layout(
-        title=f'DTE Distribution - {compliance_pct:.1f}% Compliant',
+        title=f'DTE Distribution - {compliance_pct:.1f}% Compliant<br><sub>Blue zone = Target range</sub>',
         xaxis_title='Days to Expiration',
         yaxis_title='Count',
         showlegend=True,
-        template='plotly_white'
+        template='plotly_white',
+        height=500,
+        xaxis=dict(range=[0, max(90, max_dte + 10)])
     )
     
     return fig
@@ -713,6 +816,452 @@ def plot_compliance_scorecard(compliance_data: Dict) -> go.Figure:
         yaxis_range=[0, 105],
         showlegend=False,
         template='plotly_white'
+    )
+    
+    return fig
+
+
+def plot_option_coverage_heatmap(trades: List[Dict]) -> go.Figure:
+    """Create heatmap showing option selection coverage across delta and DTE ranges"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Extract delta and DTE data
+    deltas = []
+    dtes = []
+    
+    for trade in trades:
+        if 'delta_actual' in trade and trade['delta_actual'] is not None:
+            deltas.append(abs(trade['delta_actual']))  # Use absolute value for puts
+        if 'dte_actual' in trade and trade['dte_actual'] is not None:
+            dtes.append(trade['dte_actual'])
+    
+    if not deltas or not dtes:
+        return go.Figure().add_annotation(text="No delta/DTE data available", showarrow=False)
+    
+    # Create bins
+    delta_bins = [0, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 1.0]
+    dte_bins = [0, 7, 14, 21, 30, 45, 60, 90, 180]
+    
+    # Create 2D histogram data
+    import numpy as np
+    hist, delta_edges, dte_edges = np.histogram2d(deltas, dtes, bins=[delta_bins, dte_bins])
+    
+    # Create labels for bins
+    delta_labels = [f"{delta_bins[i]:.2f}-{delta_bins[i+1]:.2f}" for i in range(len(delta_bins)-1)]
+    dte_labels = [f"{dte_bins[i]}-{dte_bins[i+1]}" for i in range(len(dte_bins)-1)]
+    
+    # Create heatmap
+    fig = go.Figure(data=go.Heatmap(
+        z=hist.T,  # Transpose to match x/y orientation
+        x=delta_labels,
+        y=dte_labels,
+        colorscale='Viridis',
+        text=hist.T.astype(int),
+        texttemplate='%{text}',
+        textfont={"size": 10},
+        hoverongaps=False,
+        hovertemplate='Delta: %{x}<br>DTE: %{y}<br>Trades: %{z}<extra></extra>'
+    ))
+    
+    # Add target zone rectangle (assuming 0.25-0.35 delta, 30-60 DTE)
+    # Find indices for target zones
+    target_delta_start = next(i for i, label in enumerate(delta_labels) if "0.25" in label)
+    target_delta_end = next(i for i, label in enumerate(delta_labels) if "0.35" in label) + 1
+    target_dte_start = next(i for i, label in enumerate(dte_labels) if "30-" in label or "-30" in label)
+    target_dte_end = next(i for i, label in enumerate(dte_labels) if "60-" in label or "-60" in label) + 1
+    
+    # Add rectangle for target zone
+    fig.add_shape(
+        type="rect",
+        x0=target_delta_start - 0.5, x1=target_delta_end - 0.5,
+        y0=target_dte_start - 0.5, y1=target_dte_end - 0.5,
+        line=dict(color="red", width=3, dash="dash"),
+    )
+    
+    # Add annotation for target zone
+    fig.add_annotation(
+        x=(target_delta_start + target_delta_end - 1) / 2,
+        y=(target_dte_start + target_dte_end - 1) / 2,
+        text="Target<br>Zone",
+        showarrow=False,
+        font=dict(color="red", size=12, family="Arial Black"),
+        bgcolor="rgba(255,255,255,0.8)"
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title='Option Selection Coverage Heatmap<br><sub>Number of trades by Delta and DTE ranges</sub>',
+        xaxis_title='Delta Range',
+        yaxis_title='DTE Range (Days)',
+        template='plotly_white',
+        height=600
+    )
+    
+    return fig
+
+
+def plot_delta_coverage_time_series(trades: List[Dict]) -> go.Figure:
+    """Plot delta values over time with target bands"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Extract data
+    dates = []
+    deltas = []
+    compliant = []
+    
+    for trade in trades:
+        if 'entry_date' in trade and 'delta_actual' in trade and trade['delta_actual'] is not None:
+            dates.append(pd.to_datetime(trade['entry_date']))
+            deltas.append(abs(trade['delta_actual']))
+            compliant.append(trade.get('delta_compliant', False))
+    
+    if not dates:
+        return go.Figure().add_annotation(text="No delta time series data available", showarrow=False)
+    
+    # Sort by date
+    sorted_data = sorted(zip(dates, deltas, compliant))
+    dates, deltas, compliant = zip(*sorted_data)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add scatter plot with color coding
+    colors = ['green' if c else 'red' for c in compliant]
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=deltas,
+        mode='markers+lines',
+        name='Actual Delta',
+        marker=dict(color=colors, size=8),
+        line=dict(color='gray', width=1),
+        hovertemplate='Date: %{x}<br>Delta: %{y:.3f}<extra></extra>'
+    ))
+    
+    # Add target band (assuming 0.25-0.35 from config)
+    target_delta = 0.30
+    tolerance = 0.05
+    
+    # Add shaded target area
+    fig.add_shape(
+        type="rect",
+        x0=dates[0], x1=dates[-1],
+        y0=target_delta - tolerance, y1=target_delta + tolerance,
+        fillcolor="green", opacity=0.2,
+        line=dict(width=0),
+    )
+    
+    # Add target lines
+    fig.add_hline(y=target_delta, line_dash="dash", line_color="green", 
+                  annotation_text=f"Target: {target_delta:.2f}")
+    fig.add_hline(y=target_delta - tolerance, line_dash="dot", line_color="orange", 
+                  annotation_text=f"Min: {target_delta-tolerance:.2f}")
+    fig.add_hline(y=target_delta + tolerance, line_dash="dot", line_color="orange", 
+                  annotation_text=f"Max: {target_delta+tolerance:.2f}")
+    
+    # Calculate statistics
+    mean_delta = np.mean(deltas)
+    std_delta = np.std(deltas)
+    compliance_rate = sum(compliant) / len(compliant) * 100
+    
+    # Add statistics box
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=0.02, y=0.98,
+        text=f"Mean: {mean_delta:.3f}<br>Std: {std_delta:.3f}<br>Compliance: {compliance_rate:.1f}%",
+        showarrow=False,
+        bordercolor="black",
+        borderwidth=1,
+        bgcolor="white",
+        align="left"
+    )
+    
+    fig.update_layout(
+        title='Delta Coverage Over Time<br><sub>Green = Compliant, Red = Non-compliant</sub>',
+        xaxis_title='Date',
+        yaxis_title='Delta',
+        template='plotly_white',
+        hovermode='x unified',
+        height=500
+    )
+    
+    return fig
+
+
+def plot_dte_coverage_time_series(trades: List[Dict]) -> go.Figure:
+    """Plot DTE values over time with target bands"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Extract data
+    dates = []
+    dtes = []
+    compliant = []
+    
+    for trade in trades:
+        if 'entry_date' in trade and 'dte_actual' in trade:
+            dates.append(pd.to_datetime(trade['entry_date']))
+            dtes.append(trade['dte_actual'])
+            compliant.append(trade.get('dte_compliant', False))
+    
+    if not dates:
+        return go.Figure().add_annotation(text="No DTE time series data available", showarrow=False)
+    
+    # Sort by date
+    sorted_data = sorted(zip(dates, dtes, compliant))
+    dates, dtes, compliant = zip(*sorted_data)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add scatter plot with color coding
+    colors = ['green' if c else 'red' for c in compliant]
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=dtes,
+        mode='markers+lines',
+        name='Actual DTE',
+        marker=dict(color=colors, size=8),
+        line=dict(color='gray', width=1),
+        hovertemplate='Date: %{x}<br>DTE: %{y}<extra></extra>'
+    ))
+    
+    # Add target band (assuming 30-60 from config)
+    min_dte = 30
+    max_dte = 60
+    target_dte = 45
+    
+    # Add shaded target area
+    fig.add_shape(
+        type="rect",
+        x0=dates[0], x1=dates[-1],
+        y0=min_dte, y1=max_dte,
+        fillcolor="blue", opacity=0.2,
+        line=dict(width=0),
+    )
+    
+    # Add target lines
+    fig.add_hline(y=target_dte, line_dash="dash", line_color="blue", 
+                  annotation_text=f"Target: {target_dte}")
+    fig.add_hline(y=min_dte, line_dash="dot", line_color="orange", 
+                  annotation_text=f"Min: {min_dte}")
+    fig.add_hline(y=max_dte, line_dash="dot", line_color="orange", 
+                  annotation_text=f"Max: {max_dte}")
+    
+    # Calculate statistics
+    mean_dte = np.mean(dtes)
+    std_dte = np.std(dtes)
+    compliance_rate = sum(compliant) / len(compliant) * 100
+    
+    # Add statistics box
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=0.02, y=0.98,
+        text=f"Mean: {mean_dte:.1f}<br>Std: {std_dte:.1f}<br>Compliance: {compliance_rate:.1f}%",
+        showarrow=False,
+        bordercolor="black",
+        borderwidth=1,
+        bgcolor="white",
+        align="left"
+    )
+    
+    fig.update_layout(
+        title='DTE Coverage Over Time<br><sub>Green = Compliant, Red = Non-compliant</sub>',
+        xaxis_title='Date',
+        yaxis_title='Days to Expiration',
+        template='plotly_white',
+        hovermode='x unified',
+        height=500
+    )
+    
+    return fig
+
+
+def plot_exit_reason_distribution(trades: List[Dict]) -> go.Figure:
+    """Create pie chart of exit reasons"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Count exit reasons
+    exit_reasons = {}
+    for trade in trades:
+        if 'exit_reason' in trade and trade['exit_reason']:
+            reason = trade['exit_reason']
+            exit_reasons[reason] = exit_reasons.get(reason, 0) + 1
+    
+    if not exit_reasons:
+        return go.Figure().add_annotation(text="No exit data available", showarrow=False)
+    
+    # Create pie chart
+    fig = go.Figure(data=[go.Pie(
+        labels=list(exit_reasons.keys()),
+        values=list(exit_reasons.values()),
+        hole=0.3,
+        textinfo='label+percent',
+        marker=dict(
+            colors=px.colors.qualitative.Set3[:len(exit_reasons)]
+        )
+    )])
+    
+    # Add total trades in center
+    total_exits = sum(exit_reasons.values())
+    fig.add_annotation(
+        text=f"{total_exits}<br>Exits",
+        showarrow=False,
+        font=dict(size=20)
+    )
+    
+    fig.update_layout(
+        title='Exit Reason Distribution<br><sub>How trades are exited</sub>',
+        template='plotly_white',
+        height=500
+    )
+    
+    return fig
+
+
+def plot_exit_efficiency_heatmap(trades: List[Dict]) -> go.Figure:
+    """Create heatmap showing exit efficiency by reason and days held"""
+    if not trades:
+        return go.Figure().add_annotation(text="No trades to display", showarrow=False)
+    
+    # Prepare data
+    exit_data = []
+    for trade in trades:
+        if all(key in trade for key in ['exit_reason', 'days_held', 'pnl_pct']):
+            exit_data.append({
+                'exit_reason': trade['exit_reason'],
+                'days_held_bin': min(trade['days_held'] // 5 * 5, 30),  # 5-day bins, cap at 30+
+                'return': trade['pnl_pct'] * 100  # Convert to percentage
+            })
+    
+    if not exit_data:
+        return go.Figure().add_annotation(text="No exit efficiency data available", showarrow=False)
+    
+    # Create DataFrame and pivot
+    df = pd.DataFrame(exit_data)
+    pivot = df.pivot_table(
+        values='return',
+        index='exit_reason',
+        columns='days_held_bin',
+        aggfunc='mean'
+    )
+    
+    # Ensure all day bins are present
+    all_bins = list(range(0, 35, 5))
+    bin_labels = [f"{b}-{b+4}" if b < 30 else "30+" for b in all_bins]
+    pivot = pivot.reindex(columns=all_bins, fill_value=np.nan)
+    
+    # Create heatmap
+    fig = go.Figure(data=go.Heatmap(
+        z=pivot.values,
+        x=bin_labels,
+        y=pivot.index.tolist(),
+        colorscale='RdYlGn',
+        zmid=0,
+        text=np.round(pivot.values, 1),
+        texttemplate='%{text}%',
+        textfont={"size": 10},
+        hoverongaps=False,
+        hovertemplate='Exit: %{y}<br>Days: %{x}<br>Avg Return: %{z:.1f}%<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title='Exit Efficiency Heatmap<br><sub>Average returns by exit type and holding period</sub>',
+        xaxis_title='Days Held',
+        yaxis_title='Exit Reason',
+        template='plotly_white',
+        height=400
+    )
+    
+    return fig
+
+
+def plot_available_vs_selected_options(selection_data: List[Dict]) -> go.Figure:
+    """Plot all available options vs selected ones to show coverage"""
+    if not selection_data:
+        return go.Figure().add_annotation(text="No selection data available", showarrow=False)
+    
+    # Extract data for all options and selected options
+    all_deltas = []
+    all_dtes = []
+    selected_deltas = []
+    selected_dtes = []
+    
+    for entry in selection_data:
+        if 'available_options' in entry:
+            for opt in entry['available_options']:
+                all_deltas.append(abs(opt.get('delta', 0)))
+                all_dtes.append(opt.get('dte', 0))
+        
+        if 'selected_option' in entry and entry['selected_option']:
+            selected_deltas.append(abs(entry['selected_option'].get('delta', 0)))
+            selected_dtes.append(entry['selected_option'].get('dte', 0))
+    
+    if not all_deltas:
+        return go.Figure().add_annotation(text="No options data available", showarrow=False)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Plot all available options as gray dots
+    fig.add_trace(go.Scatter(
+        x=all_deltas,
+        y=all_dtes,
+        mode='markers',
+        name='Available Options',
+        marker=dict(
+            color='lightgray',
+            size=3,
+            opacity=0.3
+        ),
+        hovertemplate='Delta: %{x:.3f}<br>DTE: %{y}<extra></extra>'
+    ))
+    
+    # Plot selected options as colored dots
+    if selected_deltas:
+        fig.add_trace(go.Scatter(
+            x=selected_deltas,
+            y=selected_dtes,
+            mode='markers',
+            name='Selected Options',
+            marker=dict(
+                color='red',
+                size=10,
+                symbol='star'
+            ),
+            hovertemplate='Selected<br>Delta: %{x:.3f}<br>DTE: %{y}<extra></extra>'
+        ))
+    
+    # Add target zone rectangle
+    fig.add_shape(
+        type="rect",
+        x0=0.25, x1=0.35,  # Delta range
+        y0=30, y1=60,      # DTE range
+        fillcolor="green",
+        opacity=0.1,
+        line=dict(color="green", width=2, dash="dash"),
+    )
+    
+    # Add annotation for target zone
+    fig.add_annotation(
+        x=0.30, y=45,
+        text="Target Zone",
+        showarrow=False,
+        font=dict(color="green", size=14),
+        bgcolor="rgba(255,255,255,0.8)"
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title='Available vs Selected Options<br><sub>Gray dots: All available options | Red stars: Selected options</sub>',
+        xaxis_title='Delta',
+        yaxis_title='Days to Expiration (DTE)',
+        template='plotly_white',
+        height=600,
+        xaxis=dict(range=[0, 1]),
+        yaxis=dict(range=[0, 120])
     )
     
     return fig

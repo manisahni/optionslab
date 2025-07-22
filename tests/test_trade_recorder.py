@@ -13,8 +13,12 @@ def test_trade_recorder_initialization():
     """Test trade recorder initialization"""
     config = {
         'strategy': {
+            'name': 'test_strategy',
+            'option_type': 'call',
             'delta_range': {'min': 0.4, 'max': 0.6},
-            'dte_range': {'min': 30, 'max': 60}
+            'dte_range': {'min': 30, 'max': 60},
+            'exit_conditions': {},
+            'market_filters': {}
         }
     }
     
@@ -28,8 +32,12 @@ def test_record_entry():
     """Test recording trade entry"""
     config = {
         'strategy': {
+            'name': 'test_strategy',
+            'option_type': 'call',
             'delta_range': {'min': 0.4, 'max': 0.6},
-            'dte_range': {'min': 30, 'max': 60}
+            'dte_range': {'min': 30, 'max': 60},
+            'exit_conditions': {},
+            'market_filters': {}
         }
     }
     
@@ -78,8 +86,12 @@ def test_record_exit():
     """Test recording trade exit"""
     config = {
         'strategy': {
+            'name': 'test_strategy',
+            'option_type': 'call',
             'delta_range': {'min': 0.4, 'max': 0.6},
-            'dte_range': {'min': 30, 'max': 60}
+            'dte_range': {'min': 30, 'max': 60},
+            'exit_conditions': {},
+            'market_filters': {}
         }
     }
     
@@ -127,15 +139,19 @@ def test_record_exit():
     assert trade.exit_price == 7.50
     assert trade.exit_reason == 'profit_target'
     assert trade.pnl == 400.0  # (7.50 - 5.50) * 2 * 100
-    assert trade.return_pct == pytest.approx(0.3636, rel=0.01)  # 400/1100
+    assert abs(trade.return_pct - 0.3636) < 0.3636 * 0.01  # 400/1100
 
 
 def test_compliance_tracking():
     """Test compliance tracking in trades"""
     config = {
         'strategy': {
+            'name': 'test_strategy',
+            'option_type': 'call',
             'delta_range': {'min': 0.4, 'max': 0.6},
-            'dte_range': {'min': 30, 'max': 60}
+            'dte_range': {'min': 30, 'max': 60},
+            'exit_conditions': {},
+            'market_filters': {}
         }
     }
     
@@ -189,8 +205,12 @@ def test_greek_tracking_integration():
     """Test Greek tracking integration with trade recorder"""
     config = {
         'strategy': {
+            'name': 'test_strategy',
+            'option_type': 'call',
             'delta_range': {'min': 0.4, 'max': 0.6},
-            'dte_range': {'min': 30, 'max': 60}
+            'dte_range': {'min': 30, 'max': 60},
+            'exit_conditions': {},
+            'market_filters': {}
         }
     }
     
@@ -223,8 +243,12 @@ def test_trade_summary_generation():
     """Test generating trade summaries"""
     config = {
         'strategy': {
+            'name': 'test_strategy',
+            'option_type': 'call',
             'delta_range': {'min': 0.4, 'max': 0.6},
-            'dte_range': {'min': 30, 'max': 60}
+            'dte_range': {'min': 30, 'max': 60},
+            'exit_conditions': {},
+            'market_filters': {}
         }
     }
     
@@ -277,5 +301,5 @@ def test_trade_summary_generation():
     
     # Verify summary data
     assert summary['pnl'] == 500.0  # (8.00 - 5.50) * 2 * 100
-    assert summary['return_pct'] == pytest.approx(0.4545, rel=0.01)
+    assert abs(summary['return_pct'] - 0.4545) < 0.4545 * 0.01
     assert summary['exit_reason'] == 'profit_target'

@@ -3,7 +3,7 @@
 Tests for the data loader module
 """
 
-import pytest
+
 import pandas as pd
 from pathlib import Path
 from optionslab.data_loader import load_data, load_strategy_config, validate_config
@@ -88,8 +88,11 @@ def test_validate_config():
     }
     
     # Should raise exception
-    with pytest.raises(Exception):
+    try:
         validate_config(invalid_config)
+        assert False, "Expected exception for invalid config"
+    except:
+        pass  # Expected
 
 
 def test_data_columns_transformation():

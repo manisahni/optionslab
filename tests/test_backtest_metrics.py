@@ -15,11 +15,11 @@ def test_calculate_performance_metrics():
     """Test performance metrics calculation"""
     # Sample equity curve
     equity_curve = [
-        {'date': '2022-01-01', 'equity': 10000},
-        {'date': '2022-01-02', 'equity': 10100},
-        {'date': '2022-01-03', 'equity': 10050},
-        {'date': '2022-01-04', 'equity': 10200},
-        {'date': '2022-01-05', 'equity': 10150}
+        {'date': '2022-01-01', 'total_value': 10000},
+        {'date': '2022-01-02', 'total_value': 10100},
+        {'date': '2022-01-03', 'total_value': 10050},
+        {'date': '2022-01-04', 'total_value': 10200},
+        {'date': '2022-01-05', 'total_value': 10150}
     ]
     
     # Sample trades
@@ -167,7 +167,7 @@ def test_win_rate_calculation():
     ]
     
     metrics = calculate_performance_metrics(
-        [{'date': '2022-01-01', 'equity': 10000}],
+        [{'date': '2022-01-01', 'total_value': 10000}],
         winning_trades,
         10000
     )
@@ -182,7 +182,7 @@ def test_win_rate_calculation():
     ]
     
     metrics = calculate_performance_metrics(
-        [{'date': '2022-01-01', 'equity': 10000}],
+        [{'date': '2022-01-01', 'total_value': 10000}],
         losing_trades,
         10000
     )
@@ -192,7 +192,7 @@ def test_win_rate_calculation():
     
     # No trades
     metrics = calculate_performance_metrics(
-        [{'date': '2022-01-01', 'equity': 10000}],
+        [{'date': '2022-01-01', 'total_value': 10000}],
         [],
         10000
     )

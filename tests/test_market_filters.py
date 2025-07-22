@@ -30,7 +30,7 @@ def test_iv_regime_filter():
         }
     }
     
-    filters = MarketFilters(config, historical_data)
+    filters = MarketFilters(config, historical_data, historical_data["date"].unique())
     
     # Test at different points
     # Early in the series - IV should be in lower percentile
@@ -63,7 +63,7 @@ def test_moving_average_filter():
         }
     }
     
-    filters = MarketFilters(config, historical_data)
+    filters = MarketFilters(config, historical_data, historical_data["date"].unique())
     
     # Test when price is above MA (should pass)
     result_above = filters.check_all_filters('2022-02-28', 158, 58)  # Price > MA
@@ -102,7 +102,7 @@ def test_rsi_filter():
         }
     }
     
-    filters = MarketFilters(config, historical_data)
+    filters = MarketFilters(config, historical_data, historical_data["date"].unique())
     
     # After strong upward movement, RSI should be high
     result = filters.check_all_filters('2022-01-10', prices[9], 9)
@@ -138,7 +138,7 @@ def test_bollinger_bands_filter():
         }
     }
     
-    filters = MarketFilters(config, historical_data)
+    filters = MarketFilters(config, historical_data, historical_data["date"].unique())
     
     # Test with price inside expected bands
     avg_price = sum(prices[-20:]) / 20
@@ -178,7 +178,7 @@ def test_multiple_filters():
         }
     }
     
-    filters = MarketFilters(config, historical_data)
+    filters = MarketFilters(config, historical_data, historical_data["date"].unique())
     
     # All filters must pass
     result = filters.check_all_filters('2022-02-28', 129, 58)
@@ -206,7 +206,7 @@ def test_disabled_filters():
         }
     }
     
-    filters = MarketFilters(config, historical_data)
+    filters = MarketFilters(config, historical_data, historical_data["date"].unique())
     
     # Should always return True when all filters are disabled
     result = filters.check_all_filters('2022-01-15', 50, 14)  # Price well below data

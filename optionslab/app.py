@@ -35,7 +35,12 @@ from .visualization import (
     create_summary_dashboard,
     plot_delta_histogram,
     plot_dte_histogram,
-    plot_compliance_scorecard
+    plot_compliance_scorecard,
+    plot_option_coverage_heatmap,
+    plot_delta_coverage_time_series,
+    plot_dte_coverage_time_series,
+    plot_exit_reason_distribution,
+    plot_exit_efficiency_heatmap
 )
 from .ai_openai import get_openai_assistant
 
@@ -528,7 +533,12 @@ def create_simple_interface():
                                 ("Summary Dashboard", "dashboard"),
                                 ("Delta Histogram", "delta_histogram"),
                                 ("DTE Histogram", "dte_histogram"),
-                                ("Compliance Scorecard", "compliance_scorecard")
+                                ("Compliance Scorecard", "compliance_scorecard"),
+                                ("📍 Option Coverage Heatmap", "coverage_heatmap"),
+                                ("📈 Delta Coverage Timeline", "delta_timeline"),
+                                ("📅 DTE Coverage Timeline", "dte_timeline"),
+                                ("🎯 Exit Reason Distribution", "exit_distribution"),
+                                ("🔥 Exit Efficiency Heatmap", "exit_efficiency")
                             ],
                             value="pnl_curve"
                         )
@@ -723,8 +733,20 @@ def create_simple_interface():
                     from .backtest_metrics import calculate_compliance_scorecard
                     compliance_data = calculate_compliance_scorecard(trades)
                     return plot_compliance_scorecard(compliance_data)
+                elif chart_type == "coverage_heatmap":
+                    return plot_option_coverage_heatmap(trades)
+                elif chart_type == "delta_timeline":
+                    return plot_delta_coverage_time_series(trades)
+                elif chart_type == "dte_timeline":
+                    return plot_dte_coverage_time_series(trades)
+                elif chart_type == "exit_distribution":
+                    return plot_exit_reason_distribution(trades)
+                elif chart_type == "exit_efficiency":
+                    return plot_exit_efficiency_heatmap(trades)
             except Exception as e:
                 print(f"Visualization error: {e}")
+                import traceback
+                traceback.print_exc()
                 return None
         
         def delete_selected_backtest(selected_path, current_selection):
