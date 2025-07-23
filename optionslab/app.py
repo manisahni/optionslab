@@ -646,6 +646,9 @@ def create_simple_interface():
 - **Win Rate:** {win_rate:.1%}
 - **Date:** {metadata.get('backtest_date', 'Unknown')[:10]}
 """
+                # Add CSV path to metadata for AI access
+                metadata['csv_path'] = selected_path
+                
                 # Convert to format expected by existing code
                 data = {
                     'metadata': metadata,
