@@ -232,27 +232,76 @@ Keep responses concise and focused on compliance metrics. Use the compliance_sco
             return f"Error accessing codebase: {e}"
     
     def _build_context(self, backtest_data: Optional[Dict]) -> str:
-        """Build comprehensive context from backtest data with compliance analysis"""
+        """Build comprehensive context from backtest data using the new CSV format"""
         if not backtest_data:
             return "No backtest data provided."
         
         context_parts = []
         
-        # 1. Strategy Configuration (load first for compliance analysis)
+        # Get CSV path from metadata
         metadata = backtest_data.get('metadata', {})
-        strategy_name = metadata.get('strategy', '')
-        strategy_config = None
-        if strategy_name:
-            strategy_config = self._load_strategy_config(strategy_name)
+        csv_path = metadata.get('csv_path', '')
         
-        if strategy_config:
-            context_parts.append("=== STRATEGY CONFIGURATION ===")
-            context_parts.append(yaml.dump(strategy_config, default_flow_style=False))
+        # If we have a CSV path, load everything from there
+        if csv_path and Path(csv_path).exists():
+            try:
+                from .csv_enhanced import load_comprehensive_csv
+                csv_data = load_comprehensive_csv(csv_path)
+                
+                # 1. Strategy Configuration
+                if csv_data.get('strategy_config'):
+                    context_parts.append("=== STRATEGY CONFIGURATION ===")
+                    context_parts.append(yaml.dump(csv_data['strategy_config'], default_flow_style=False))
+                
+                # 2. Metadata overview
+                csv_metadata = csv_data.get('metadata', {})
+                context_parts.append(f"""\n=== BACKTEST OVERVIEW ===
+Backtest ID: {csv_metadata.get('backtest_id', 'Unknown')}
+Name: {csv_metadata.get('memorable_name', 'Unknown')}
+Strategy: {csv_metadata.get('strategy', 'Unknown')}
+Total Return: {csv_metadata.get('total_return', 0):.2%}
+Sharpe Ratio: {csv_metadata.get('sharpe_ratio', 'N/A')}
+Max Drawdown: {csv_metadata.get('max_drawdown', 'N/A')}
+Total Trades: {csv_metadata.get('total_trades', 0)}
+Date Range: {csv_metadata.get('start_date')} to {csv_metadata.get('end_date')}
+Initial Capital: ${csv_metadata.get('initial_capital', 10000):,}
+Final Value: ${csv_metadata.get('final_value', 0):,}""")
+                
+                # 3. Load trade data
+                trades_df = csv_data.get('trades')
+                if trades_df is not None and not trades_df.empty:
+                    full_trade_data = self._format_trades_for_context(trades_df)
+                    context_parts.append(f"\n{full_trade_data}")
+                
+                # 4. Add audit log if available
+                if csv_data.get('audit_log'):
+                    context_parts.append("\n=== AUDIT LOG (Last 50 lines) ===")
+                    audit_lines = csv_data['audit_log'].strip().split('\n')[-50:]
+                    context_parts.append('\n'.join(audit_lines))
+                
+                return '\n'.join(context_parts)
+                
+            except Exception as e:
+                print(f"Error loading comprehensive CSV: {e}")
+                # Fall back to old method
         
-        # 2. Load trade data with compliance columns
-        full_trade_data = self._load_full_trade_data(backtest_data)
-        if full_trade_data:
-            context_parts.append(f"\n{full_trade_data}")
+        # If CSV not available, build minimal context
+        context_parts.append("=== LIMITED DATA AVAILABLE ===")
+        context_parts.append("No comprehensive CSV file found. Limited analysis available.")
+        
+        # Add basic metadata if available
+        if metadata:
+            context_parts.append(f"\n=== BACKTEST OVERVIEW ===")
+            context_parts.append(f"Name: {metadata.get('memorable_name', 'Unknown')}")
+            context_parts.append(f"Total Return: {metadata.get('total_return', 0):.2%}")
+            context_parts.append(f"Total Trades: {metadata.get('total_trades', 0)}")
+        
+        # If trades are directly available in backtest_data
+        if 'trades' in backtest_data and backtest_data['trades']:
+            trades_df = pd.DataFrame(backtest_data['trades'])
+            if not trades_df.empty:
+                trade_data = self._format_trades_for_context(trades_df)
+                context_parts.append(f"\n{trade_data}")
         
         # 3. Add Compliance Scorecard (Priority)
         # Get compliance scorecard from results or calculate it
@@ -278,22 +327,8 @@ Keep responses concise and focused on compliance metrics. Use the compliance_sco
             context_parts.append(f"Exit Compliance: {scorecard.get('exit_compliance', 0):.1f}%")
             context_parts.append(f"Fully Compliant Trades: {scorecard.get('compliant_trades', 0)}/{scorecard.get('total_trades', 0)}")
         
-        # 4. Compliance Analysis
-        if strategy_config:
-            # Load trades_df for compliance analysis
-            json_path = metadata.get('json_path', '')
-            csv_path = json_path.replace('.json', '.csv')
-            if Path(csv_path).exists():
-                try:
-                    trades_df = pd.read_csv(csv_path)
-                    # Add compliance columns
-                    trades_df = self._add_compliance_columns(trades_df, strategy_config)
-                    # Generate compliance analysis
-                    compliance_analysis = self._analyze_strategy_compliance(strategy_config, trades_df)
-                    context_parts.append(f"\n=== COMPLIANCE ANALYSIS ===")
-                    context_parts.append(compliance_analysis)
-                except Exception as e:
-                    context_parts.append(f"\n=== COMPLIANCE ANALYSIS ===\nError generating compliance analysis: {e}")
+        # Compliance analysis is already included in the comprehensive CSV data
+        # No need for additional processing here
         
         # 5. Add metadata overview
         if metadata:
@@ -543,15 +578,66 @@ Initial Capital: ${metadata.get('initial_capital', 10000):,}""")
         
         return None
     
+    def _format_trades_for_context(self, trades_df: pd.DataFrame) -> str:
+        """Format trades DataFrame for AI context"""
+        if trades_df.empty:
+            return "No trades found in data."
+        
+        # Calculate key statistics
+        winning_trades = trades_df[trades_df['pnl'] > 0]
+        losing_trades = trades_df[trades_df['pnl'] < 0]
+        
+        # Build comprehensive trade data context
+        trade_data = f"""=== COMPLETE TRADE DATA FOR ANALYSIS ===
+
+OVERVIEW STATISTICS:
+Total Trades: {len(trades_df)}
+Winning Trades: {len(winning_trades)} ({len(winning_trades)/len(trades_df)*100:.1f}%)
+Losing Trades: {len(losing_trades)} ({len(losing_trades)/len(trades_df)*100:.1f}%)
+Average P&L: ${trades_df['pnl'].mean():.2f}
+Best Trade: ${trades_df['pnl'].max():.2f}
+Worst Trade: ${trades_df['pnl'].min():.2f}
+Average Days Held: {trades_df['days_held'].mean():.1f}
+
+DATA COLUMNS AVAILABLE: {list(trades_df.columns)}
+
+COMPLETE TRADE LOG:
+"""
+        
+        # Add ALL trades with full details
+        max_trades_for_full_data = 50  # Limit for full data display
+        if len(trades_df) > max_trades_for_full_data:
+            trade_data += f"\nNOTE: Dataset has {len(trades_df)} trades. Showing first {max_trades_for_full_data} trades with full details, then summary.\n"
+            trades_to_show = trades_df.head(max_trades_for_full_data)
+            remaining_trades = trades_df.iloc[max_trades_for_full_data:]
+        else:
+            trades_to_show = trades_df
+            remaining_trades = pd.DataFrame()
+        
+        # Show full details for selected trades
+        for idx, trade in trades_to_show.iterrows():
+            trade_data += f"\n--- Trade {trade.get('trade_id', idx)} ---\n"
+            for col, val in trade.items():
+                if pd.notna(val) and col != 'greeks_history':  # Skip large columns
+                    trade_data += f"{col}: {val}\n"
+        
+        # Summary for remaining trades
+        if not remaining_trades.empty:
+            trade_data += f"\n=== SUMMARY OF REMAINING {len(remaining_trades)} TRADES ===\n"
+            trade_data += f"Total P&L: ${remaining_trades['pnl'].sum():.2f}\n"
+            trade_data += f"Average P&L: ${remaining_trades['pnl'].mean():.2f}\n"
+            trade_data += f"Win Rate: {(remaining_trades['pnl'] > 0).sum() / len(remaining_trades) * 100:.1f}%\n"
+        
+        return trade_data
+    
     def _load_full_trade_data(self, backtest_data: Dict) -> str:
         """Load FULL, unabridged trade data for agentic analysis"""
         metadata = backtest_data.get('metadata', {})
-        json_path = metadata.get('json_path', '')
+        csv_path = metadata.get('csv_path', '')
         
-        if not json_path:
+        if not csv_path:
             return "No trade data available."
         
-        csv_path = json_path.replace('.json', '.csv')
         if not Path(csv_path).exists():
             return "Trade CSV file not found."
         

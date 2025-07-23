@@ -7,7 +7,7 @@
 python run_backtest_simple.py --strategy long_call --start 2025-01-01 --end 2025-06-30
 ```
 
-Output: `backtest_results_long_call_<timestamp>.json`
+Output: `<backtest_id>_<memorable_name>_<timestamp>.csv`
 
 ### Step 2: View Results with AI
 ```bash
@@ -32,7 +32,7 @@ Open: http://localhost:7860
 ✅ No crashes or memory issues  
 ✅ Built for AI/ML demos  
 ✅ Simpler chat interface  
-✅ Upload any backtest JSON  
+✅ Upload any backtest CSV  
 ✅ Just ~200 lines of code  
 
 ### Example AI Questions:
@@ -50,4 +50,4 @@ Open: http://localhost:7860
 - `iron_condor` - 4-leg spread
 
 ## No Framework Hell!
-Just Python, JSON files, and a simple UI. The way it should be.
+Just Python, CSV files, and a simple UI. The way it should be.

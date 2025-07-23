@@ -5,15 +5,21 @@
 ### 1. Finding Logs
 ```python
 # Load the index to find available logs
-import json
-with open('trade_logs/index.json', 'r') as f:
-    index = json.load(f)
+import pandas as pd
+index_df = pd.read_csv('trade_logs/index.csv')
 
 # Find logs by strategy
-long_call_logs = [log for log in index['logs'] if 'long_call' in log['strategy']]
+long_call_logs = index_df[index_df['strategy'].str.contains('long_call', na=False)]
 
 # Find logs by date range
-jan_2025_logs = [log for log in index['logs'] if log['year'] == 2025 and log['month'] == 1]
+jan_2025_logs = index_df[(index_df['year'] == 2025) & (index_df['month'] == 1)]
+
+# Load a comprehensive CSV file
+from optionslab.csv_enhanced import load_comprehensive_csv
+backtest_data = load_comprehensive_csv('path/to/backtest.csv')
+metadata = backtest_data['metadata']
+trades_df = backtest_data['trades']
+strategy_config = backtest_data['strategy_config']
 ```
 
 ### 2. Analyzing Trade Patterns
@@ -24,34 +30,28 @@ Common analysis tasks:
 - **Strategy Optimization**: Identify optimal entry/exit parameters
 
 ### 3. Data Structure
-Each log file contains:
-```json
-{
-  "metadata": {
-    "strategy": "simple_long_call",
-    "backtest_date": "2025-01-19",
-    "start_date": "2022-01-01",
-    "end_date": "2022-12-31",
-    "initial_capital": 10000,
-    "final_value": 9156.00,
-    "total_return": -0.0844,
-    "total_trades": 25,
-    "win_rate": 0.44
-  },
-  "trades": [
-    {
-      "trade_id": 1,
-      "entry_date": "2022-01-03",
-      "option_type": "C",
-      "strike": 487.5,
-      "entry_delta": 0.112,
-      "exit_delta": 0.025,
-      "pnl": -374.00,
-      "pnl_pct": -79.07,
-      // ... all other fields
-    }
-  ]
-}
+Each comprehensive CSV file contains:
+
+**Metadata Header Section:**
+```
+# BACKTEST_ID,unique-identifier-here
+# MEMORABLE_NAME,backtest_name
+# STRATEGY,simple_long_call
+# START_DATE,2022-01-01
+# END_DATE,2022-12-31
+# INITIAL_CAPITAL,10000
+# FINAL_VALUE,9156.00
+# TOTAL_RETURN,-0.0844
+# SHARPE_RATIO,0.85
+# MAX_DRAWDOWN,-0.15
+# WIN_RATE,0.44
+# TOTAL_TRADES,25
+```
+
+**Trade Data Section:**
+```csv
+backtest_id,trade_id,entry_date,option_type,strike,entry_delta,exit_delta,pnl,pnl_pct,...
+uuid-here,1,2022-01-03,C,487.5,0.112,0.025,-374.00,-79.07,...
 ```
 
 ### 4. Key Metrics for AI Analysis
@@ -91,7 +91,9 @@ Each log file contains:
    - Compare actual returns vs potential if held longer
 
 ### 6. Performance Tips
-- Use JSON format for structured analysis
-- Load index.json first to avoid scanning all files
-- Cache frequently accessed logs
+- Use the comprehensive CSV format for complete backtest data
+- Load index.csv first to find relevant backtests
+- Each CSV file contains all data linked by a unique backtest ID
+- CSV format is Excel-compatible for additional analysis
 - Use pandas DataFrame for complex analysis
+- The csv_enhanced module provides easy loading of all data sections

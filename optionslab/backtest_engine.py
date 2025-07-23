@@ -8,7 +8,6 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from datetime import datetime
-import json
 from typing import List, Dict, Optional
 
 # Import our modular components
@@ -41,7 +40,13 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
     Returns:
         Dictionary containing backtest results or None if failed
     """
+    import uuid
+    
+    # Generate unique backtest ID at the very start
+    backtest_id = str(uuid.uuid4())
+    
     print("🚀 AUDIT: Starting auditable backtest")
+    print(f"🔑 AUDIT: Backtest ID: {backtest_id}")
     print("=" * 60)
     
     # Load data using data_loader module
@@ -286,6 +291,7 @@ def run_auditable_backtest(data_file, config_file, start_date, end_date):
     
     # Prepare complete results package
     results = {
+        'backtest_id': backtest_id,  # Include the unique ID
         'final_value': final_value,
         'total_return': total_return,
         'trades': trades_dict,
@@ -399,12 +405,11 @@ def _close_final_positions(positions: List[Dict], data: pd.DataFrame,
 
 
 def _export_results(results: Dict):
-    """Export backtest results to CSV and JSON formats
+    """Export backtest results to CSV format only
     
     Args:
         results: Complete backtest results dictionary
     """
-    export_format = results['config'].get('export_format', ['csv', 'json'])
     export_dir = results['config'].get('export_dir', 'backtest_results')
     
     Path(export_dir).mkdir(parents=True, exist_ok=True)
@@ -412,48 +417,19 @@ def _export_results(results: Dict):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     strategy_name = results['config']['name'].replace(' ', '_').lower()
     
-    if 'csv' in export_format:
-        print(f"\n📁 AUDIT: Exporting to CSV...")
-        
-        # Export trades
-        trades_df = pd.DataFrame(results['trades'])
-        trades_file = Path(export_dir) / f"{strategy_name}_trades_{timestamp}.csv"
-        trades_df.to_csv(trades_file, index=False)
-        print(f"✅ AUDIT: Trades exported to {trades_file}")
-        
-        # Export equity curve
-        equity_df = pd.DataFrame(results['equity_curve'])
-        equity_file = Path(export_dir) / f"{strategy_name}_equity_{timestamp}.csv"
-        equity_df.to_csv(equity_file, index=False)
-        print(f"✅ AUDIT: Equity curve exported to {equity_file}")
+    print(f"\n📁 AUDIT: Exporting to CSV...")
     
-    if 'json' in export_format:
-        print(f"\n📁 AUDIT: Exporting to JSON...")
-        
-        json_data = {
-            'metadata': {
-                'strategy_name': results['config']['name'],
-                'backtest_timestamp': timestamp,
-                'start_date': results['start_date'],
-                'end_date': results['end_date']
-            },
-            'config': results['config'],
-            'results': {
-                'initial_capital': results['initial_capital'],
-                'final_value': results['final_value'],
-                'total_return': results['total_return'],
-                'performance_metrics': results['performance_metrics']
-            },
-            'compliance_scorecard': results['compliance_scorecard'],
-            'implementation_metrics': results['implementation_metrics'],
-            'trades': results['trades'],
-            'equity_curve': results['equity_curve']
-        }
-        
-        json_file = Path(export_dir) / f"{strategy_name}_results_{timestamp}.json"
-        with open(json_file, 'w') as f:
-            json.dump(json_data, f, indent=2, default=str)
-        print(f"✅ AUDIT: Results exported to {json_file}")
+    # Export trades
+    trades_df = pd.DataFrame(results['trades'])
+    trades_file = Path(export_dir) / f"{strategy_name}_trades_{timestamp}.csv"
+    trades_df.to_csv(trades_file, index=False)
+    print(f"✅ AUDIT: Trades exported to {trades_file}")
+    
+    # Export equity curve
+    equity_df = pd.DataFrame(results['equity_curve'])
+    equity_file = Path(export_dir) / f"{strategy_name}_equity_{timestamp}.csv"
+    equity_df.to_csv(equity_file, index=False)
+    print(f"✅ AUDIT: Equity curve exported to {equity_file}")
 
 
 if __name__ == "__main__":

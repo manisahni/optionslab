@@ -8,12 +8,12 @@ A dramatically simplified 2-component architecture for options backtesting with 
 
 1. **Backtest Runner** (`run_backtest_simple.py`) - Standalone Python script
    - Runs backtests independently 
-   - Outputs comprehensive JSON with results + all source code
+   - Outputs comprehensive CSV with results + all data
    - No UI, no servers, just computation
 
 2. **Results Viewer** (`view_results_simple.py`) - Streamlit app  
-   - Displays backtest results from JSON files
-   - AI chat interface with full code context
+   - Displays backtest results from CSV files
+   - AI chat interface with full backtest context
    - Clean separation from backtest execution
 
 ## Usage
@@ -32,7 +32,7 @@ Available strategies:
 - `cash_secured_put` - Sell puts with cash collateral
 - `iron_condor` - Four-leg options spread
 
-Output: `backtest_results_<strategy>_<timestamp>.json`
+Output: `<backtest_id>_<memorable_name>_<timestamp>.csv`
 
 ### 2. View Results & AI Analysis
 

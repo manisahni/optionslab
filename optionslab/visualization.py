@@ -1286,43 +1286,66 @@ def create_summary_dashboard(trades: List[Dict], initial_capital: float = 10000)
     completed_trades = df[df['exit_date'].notna()].copy()
     
     if not completed_trades.empty:
-        # 1. P&L Curve (simplified)
-        completed_trades['exit_date'] = pd.to_datetime(completed_trades['exit_date'])
-        completed_trades = completed_trades.sort_values('exit_date')
-        completed_trades['cumulative_pnl'] = completed_trades['pnl'].cumsum()
+        try:
+            # 1. P&L Curve (simplified)
+            if 'exit_date' in completed_trades.columns and 'pnl' in completed_trades.columns:
+                completed_trades['exit_date'] = pd.to_datetime(completed_trades['exit_date'])
+                completed_trades = completed_trades.sort_values('exit_date')
+                completed_trades['cumulative_pnl'] = completed_trades['pnl'].cumsum()
+                
+                fig.add_trace(go.Scatter(
+                    x=completed_trades['exit_date'],
+                    y=initial_capital + completed_trades['cumulative_pnl'],
+                    mode='lines+markers',
+                    name='Portfolio Value',
+                    line=dict(color='blue', width=2)
+                ), row=1, col=1)
+        except Exception as e:
+            print(f"Warning: Could not create P&L curve: {e}")
         
-        fig.add_trace(go.Scatter(
-            x=completed_trades['exit_date'],
-            y=initial_capital + completed_trades['cumulative_pnl'],
-            mode='lines+markers',
-            name='Portfolio Value',
-            line=dict(color='blue', width=2)
-        ), row=1, col=1)
+        try:
+            # 2. Win/Loss Distribution
+            if 'pnl_pct' in completed_trades.columns:
+                fig.add_trace(go.Histogram(
+                    x=completed_trades['pnl_pct'],
+                    marker_color=['green' if x > 0 else 'red' for x in completed_trades['pnl_pct']],
+                    name='Returns',
+                    nbinsx=20
+                ), row=1, col=2)
+        except Exception as e:
+            print(f"Warning: Could not create win/loss distribution: {e}")
         
-        # 2. Win/Loss Distribution
-        fig.add_trace(go.Histogram(
-            x=completed_trades['pnl_pct'],
-            marker_color=['green' if x > 0 else 'red' for x in completed_trades['pnl_pct']],
-            name='Returns',
-            nbinsx=20
-        ), row=1, col=2)
+        try:
+            # 3. Trade Sizes (cost)
+            # Handle both 'cost' and 'entry_cost' column names
+            cost_col = None
+            if 'cost' in completed_trades.columns:
+                cost_col = 'cost'
+            elif 'entry_cost' in completed_trades.columns:
+                cost_col = 'entry_cost'
+            
+            if cost_col and 'trade_id' in completed_trades.columns:
+                trade_sizes = completed_trades.groupby('trade_id')[cost_col].first().sort_values(ascending=False).head(10)
+                fig.add_trace(go.Bar(
+                    x=[f"Trade {tid}" for tid in trade_sizes.index],
+                    y=trade_sizes.values,
+                    name='Trade Size',
+                    marker_color='lightblue'
+                ), row=2, col=1)
+        except Exception as e:
+            print(f"Warning: Could not create trade sizes chart: {e}")
         
-        # 3. Trade Sizes (cost)
-        trade_sizes = completed_trades.groupby('trade_id')['cost'].first().sort_values(ascending=False).head(10)
-        fig.add_trace(go.Bar(
-            x=[f"Trade {tid}" for tid in trade_sizes.index],
-            y=trade_sizes.values,
-            name='Trade Size',
-            marker_color='lightblue'
-        ), row=2, col=1)
-        
-        # 4. Exit Reasons
-        exit_reasons = completed_trades['exit_reason'].value_counts()
-        fig.add_trace(go.Pie(
-            labels=exit_reasons.index,
-            values=exit_reasons.values,
-            name='Exit Reasons'
-        ), row=2, col=2)
+        try:
+            # 4. Exit Reasons
+            if 'exit_reason' in completed_trades.columns:
+                exit_reasons = completed_trades['exit_reason'].value_counts()
+                fig.add_trace(go.Pie(
+                    labels=exit_reasons.index,
+                    values=exit_reasons.values,
+                    name='Exit Reasons'
+                ), row=2, col=2)
+        except Exception as e:
+            print(f"Warning: Could not create exit reasons chart: {e}")
     
     # Update layout
     fig.update_layout(
