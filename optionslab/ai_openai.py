@@ -9,9 +9,11 @@ import json
 import yaml
 import pandas as pd
 import numpy as np
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Union
 from pathlib import Path
 from datetime import datetime
+import base64
+from io import BytesIO
 
 try:
     from openai import OpenAI
@@ -80,8 +82,14 @@ class OpenAIAssistant:
             print(f"❌ Failed to connect to OpenAI: {e}")
             return False
     
-    def chat(self, message: str, backtest_data: Optional[Dict] = None) -> str:
-        """Chat with OpenAI"""
+    def chat(self, message: str, backtest_data: Optional[Dict] = None, images: Optional[List[Union[str, bytes]]] = None) -> str:
+        """Chat with OpenAI with optional image analysis
+        
+        Args:
+            message: User message
+            backtest_data: Backtest data dictionary
+            images: List of images as base64 strings, bytes, or file paths
+        """
         if not self._initialized:
             if not self.initialize():
                 return "❌ OpenAI not configured. Please set OPENAI_API_KEY environment variable."
@@ -127,7 +135,13 @@ You have access to comprehensive backtest data including:
    - Implementation improvements
    - Risk management enhancements
 
-Keep responses concise and focused on compliance metrics. Use the compliance_scorecard data when available."""
+Keep responses concise and focused on compliance metrics. Use the compliance_scorecard data when available.
+
+When analyzing visualizations:
+- Identify visual issues (scaling, missing data, calculation errors)
+- Suggest specific Python/Plotly code fixes
+- Explain what the corrected visualization should show
+- Provide complete, working code examples"""
             
             print(f"[DEBUG] Sending chat request to OpenAI ({self.model})")
             
@@ -138,9 +152,24 @@ Keep responses concise and focused on compliance metrics. Use the compliance_sco
                 context = context[:max_context_length] + "\n\n... [CONTEXT TRUNCATED - TOO LARGE] ..."
                 print(f"[DEBUG] Context truncated from {len(context)} to {max_context_length} characters")
             
+            # Build user message content
+            user_content = [{"type": "text", "text": f"{context}\n\nUser Query: {message}"}]
+            
+            # Add images if provided
+            if images:
+                for img in images:
+                    img_data = self._process_image(img)
+                    if img_data:
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{img_data}"
+                            }
+                        })
+            
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"{context}\n\nUser Query: {message}"}
+                {"role": "user", "content": user_content}
             ]
             
             print(f"[DEBUG] Message length: system={len(system_prompt)}, user={len(messages[1]['content'])}")
@@ -174,6 +203,36 @@ Keep responses concise and focused on compliance metrics. Use the compliance_sco
             print(f"[ERROR] OpenAI chat error: {str(e)}")
             traceback.print_exc()
             return f"❌ Error communicating with OpenAI: {str(e)}"
+    
+    def _process_image(self, image: Union[str, bytes]) -> Optional[str]:
+        """Process image to base64 string
+        
+        Args:
+            image: Image as base64 string, bytes, or file path
+            
+        Returns:
+            Base64 encoded image string or None if failed
+        """
+        try:
+            if isinstance(image, str):
+                # Check if it's already base64
+                if image.startswith('data:image'):
+                    return image.split(',')[1] if ',' in image else image
+                elif Path(image).exists():
+                    # It's a file path
+                    with open(image, 'rb') as f:
+                        return base64.b64encode(f.read()).decode('utf-8')
+                else:
+                    # Assume it's already base64
+                    return image
+            elif isinstance(image, bytes):
+                return base64.b64encode(image).decode('utf-8')
+            else:
+                print(f"[ERROR] Unsupported image type: {type(image)}")
+                return None
+        except Exception as e:
+            print(f"[ERROR] Failed to process image: {e}")
+            return None
     
     def _get_codebase_context(self) -> str:
         """Create a read-only copy of the codebase and provide context"""

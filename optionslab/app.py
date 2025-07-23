@@ -18,6 +18,9 @@ import shutil
 import random
 import uuid
 from typing import List, Dict, Optional, Tuple
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
 
 # Import our backtest engine and modules
 from .backtest_engine import run_auditable_backtest
@@ -40,7 +43,8 @@ from .visualization import (
     plot_delta_coverage_time_series,
     plot_dte_coverage_time_series,
     plot_exit_reason_distribution,
-    plot_exit_efficiency_heatmap
+    plot_exit_efficiency_heatmap,
+    plot_technical_indicators_dashboard
 )
 from .ai_openai import get_openai_assistant
 
@@ -591,8 +595,65 @@ def create_simple_interface():
                             )
                             send_btn = gr.Button("📤 Send", variant="primary", scale=1)
             
+            # AI Visualization Analysis Tab
+            with gr.TabItem("🔬 AI Viz Analysis", id=3):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 🎨 Visualization Selection")
+                        
+                        viz_chart_type = gr.Dropdown(
+                            choices=[
+                                ("P&L Curve", "pnl_curve"),
+                                ("Trade Markers", "trade_markers"),
+                                ("Win/Loss Distribution", "win_loss"),
+                                ("Strategy Heatmap", "heatmap"),
+                                ("Summary Dashboard", "dashboard"),
+                                ("Delta Histogram", "delta_histogram"),
+                                ("DTE Histogram", "dte_histogram"),
+                                ("Compliance Scorecard", "compliance_scorecard"),
+                                ("Option Coverage Heatmap", "coverage_heatmap"),
+                                ("Delta Timeline", "delta_timeline"),
+                                ("DTE Timeline", "dte_timeline"),
+                                ("Exit Distribution", "exit_distribution"),
+                                ("Exit Efficiency", "exit_efficiency"),
+                                ("Greeks Evolution", "greeks_evolution"),
+                                ("Technical Indicators", "technical_indicators")
+                            ],
+                            label="Select Visualization Type",
+                            value="pnl_curve"
+                        )
+                        
+                        viz_issue_description = gr.Textbox(
+                            label="Describe the Issue",
+                            placeholder="e.g., Y-axis scaling is wrong, missing data points, calculation errors...",
+                            lines=3
+                        )
+                        
+                        analyze_viz_btn = gr.Button("🔍 Analyze Visualization", variant="primary")
+                        
+                        gr.Markdown("### 📊 Current Visualization")
+                        current_viz_plot = gr.Plot(label="Current Plot")
+                        
+                    with gr.Column(scale=2):
+                        gr.Markdown("### 🤖 AI Analysis & Suggestions")
+                        viz_analysis_output = gr.Markdown(
+                            value="Select a visualization and click 'Analyze' to get AI suggestions for improvements."
+                        )
+                        
+                        gr.Markdown("### 🛠️ Suggested Code")
+                        suggested_code = gr.Code(
+                            label="AI Suggested Code",
+                            language="python",
+                            interactive=False
+                        )
+                        
+                        apply_suggestion_btn = gr.Button("✨ Apply Suggestion", variant="secondary")
+                        
+                        gr.Markdown("### 📈 Improved Visualization")
+                        improved_viz_plot = gr.Plot(label="Improved Plot")
+            
             # Log Manager Tab
-            with gr.TabItem("📁 Log Manager", id=3):
+            with gr.TabItem("📁 Log Manager", id=4):
                 with gr.Row():
                     with gr.Column():
                         gr.Markdown("### 🗑️ Manage Logs")
@@ -949,6 +1010,143 @@ What would you like to explore?"""
             print(f"[DEBUG] Returning {len(chat_history)} messages")
             # Return updated history and clear input
             return chat_history, ""
+        
+        # AI Visualization Analysis Handlers
+        def analyze_visualization(chart_type, issue_description, backtest_data):
+            """Analyze a visualization and get AI suggestions"""
+            if not backtest_data:
+                return (
+                    "❌ No backtest selected. Please select a backtest first.",
+                    "",
+                    None,
+                    None
+                )
+            
+            try:
+                from .visualization_utils import plotly_to_base64, prepare_visualization_context, create_ai_visualization_prompt
+                
+                # Generate the current visualization
+                trades = backtest_data.get('trades', [])
+                metadata = backtest_data.get('metadata', {})
+                
+                # Get the appropriate plot function
+                plot_funcs = {
+                    "pnl_curve": lambda: plot_pnl_curve(trades, metadata.get('initial_capital', 10000)),
+                    "trade_markers": lambda: plot_trade_markers(trades),
+                    "win_loss": lambda: plot_win_loss_distribution(trades),
+                    "heatmap": lambda: plot_strategy_heatmap(trades),
+                    "dashboard": lambda: create_summary_dashboard(trades, metadata.get('initial_capital', 10000)),
+                    "delta_histogram": lambda: plot_delta_histogram(trades),
+                    "dte_histogram": lambda: plot_dte_histogram(trades),
+                    "compliance_scorecard": lambda: plot_compliance_scorecard(calculate_compliance_scorecard(trades)),
+                    "coverage_heatmap": lambda: plot_option_coverage_heatmap(trades),
+                    "delta_timeline": lambda: plot_delta_coverage_time_series(trades),
+                    "dte_timeline": lambda: plot_dte_coverage_time_series(trades),
+                    "exit_distribution": lambda: plot_exit_reason_distribution(trades),
+                    "exit_efficiency": lambda: plot_exit_efficiency_heatmap(trades),
+                    "greeks_evolution": lambda: plot_greeks_evolution(trades),
+                    "technical_indicators": lambda: plot_technical_indicators_dashboard(trades)
+                }
+                
+                if chart_type not in plot_funcs:
+                    return "❌ Unknown chart type", "", None, None
+                
+                # Generate the plot
+                current_plot = plot_funcs[chart_type]()
+                
+                # Prepare context for AI
+                viz_context = prepare_visualization_context(
+                    current_plot,
+                    chart_type,
+                    trades[:10],  # Sample trades
+                    issue_description
+                )
+                
+                # Create prompt
+                prompt = create_ai_visualization_prompt(viz_context)
+                
+                # Convert plot to base64 for AI
+                plot_image = plotly_to_base64(current_plot) if current_plot else None
+                
+                # Get AI analysis with vision
+                ai_response = ai_assistant.chat(
+                    prompt,
+                    backtest_data,
+                    images=[plot_image] if plot_image else None
+                )
+                
+                # Extract code from response (looking for ```python blocks)
+                import re
+                code_match = re.search(r'```python\n(.*?)\n```', ai_response, re.DOTALL)
+                suggested_code_text = code_match.group(1) if code_match else ""
+                
+                return (
+                    ai_response,
+                    suggested_code_text,
+                    current_plot,
+                    None  # Improved plot will be generated when applied
+                )
+                
+            except Exception as e:
+                import traceback
+                error_msg = f"❌ Error analyzing visualization: {str(e)}\n\n{traceback.format_exc()}"
+                return error_msg, "", None, None
+        
+        def apply_suggested_code(suggested_code, chart_type, backtest_data):
+            """Apply the AI suggested code and generate improved visualization"""
+            if not suggested_code or not backtest_data:
+                return None
+            
+            try:
+                # Create a safe execution environment
+                trades = backtest_data.get('trades', [])
+                metadata = backtest_data.get('metadata', {})
+                
+                # Import necessary modules for the execution context
+                exec_globals = {
+                    'pd': pd,
+                    'np': np,
+                    'go': go,
+                    'px': px,
+                    'make_subplots': make_subplots,
+                    'datetime': datetime,
+                    'trades': trades,
+                    'metadata': metadata,
+                    'initial_capital': metadata.get('initial_capital', 10000)
+                }
+                
+                # Execute the suggested code
+                exec(suggested_code, exec_globals)
+                
+                # The function should be defined in exec_globals now
+                # Try to find and execute it
+                for name, obj in exec_globals.items():
+                    if callable(obj) and name.startswith(('plot_', 'create_')):
+                        # Found the function, call it
+                        if 'initial_capital' in str(suggested_code):
+                            result = obj(trades, metadata.get('initial_capital', 10000))
+                        else:
+                            result = obj(trades)
+                        return result
+                
+                return None
+                
+            except Exception as e:
+                print(f"Error applying suggested code: {e}")
+                return None
+        
+        # Connect the visualization analysis handlers
+        analyze_viz_btn.click(
+            fn=analyze_visualization,
+            inputs=[viz_chart_type, viz_issue_description, selected_backtest_data],
+            outputs=[viz_analysis_output, suggested_code, current_viz_plot, improved_viz_plot]
+        )
+        
+        apply_suggestion_btn.click(
+            fn=apply_suggested_code,
+            inputs=[suggested_code, viz_chart_type, selected_backtest_data],
+            outputs=[improved_viz_plot]
+        )
         
         start_chat_btn.click(
             fn=start_ai_chat,
