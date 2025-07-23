@@ -2,7 +2,7 @@
 
 ## Overview
 
-OptionsLab has been refactored from a monolithic architecture into a modular design with clear separation of concerns. The main orchestration engine (`backtest_engine.py`) coordinates specialized modules that each handle specific aspects of the backtesting process.
+OptionsLab is a professional-grade options backtesting system with a modular architecture, AI integration, and comprehensive visualization capabilities. The system uses a clean separation of concerns with the main orchestration engine (`backtest_engine.py`) coordinating specialized modules for each aspect of backtesting.
 
 ## Module Structure
 
@@ -49,6 +49,37 @@ OptionsLab has been refactored from a monolithic architecture into a modular des
 - **backtest_metrics.py** (261 lines)
   - Calculates performance metrics
   - Generates compliance scorecards
+  - Computes risk-adjusted returns
+
+### Visualization
+- **visualization.py** (1000+ lines)
+  - Creates all charts and plots
+  - P&L curves, heatmaps, distributions
+  - Greeks evolution tracking
+  - Compliance visualizations
+
+### AI Integration
+- **ai_openai.py** (700+ lines)
+  - OpenAI API integration
+  - Strategy analysis functions
+  - Performance optimization suggestions
+  - Natural language chat interface
+  - Vision capabilities for chart analysis
+
+### Data Storage
+- **csv_enhanced.py** (400+ lines)
+  - Comprehensive CSV format for trade logs
+  - Includes metadata, trades, strategy config, audit logs
+  - Handles timestamp serialization
+  - Excel-compatible format
+
+### Web Interface
+- **app.py** (1300+ lines)
+  - Gradio-based web interface
+  - Multi-tab layout for backtesting, visualization, AI
+  - Unified backtest management
+  - Real-time updates
+  - Generates compliance scorecards
   - Creates implementation analytics
 
 ## Module Dependencies
@@ -64,6 +95,22 @@ backtest_engine.py
     └── backtest_metrics.py
 ```
 
+## Data Flow
+
+1. **User Input** → Gradio Interface (`app.py`)
+2. **Configuration** → Strategy YAML + Parameters
+3. **Data Loading** → `data_loader.py` reads parquet files
+4. **Backtest Execution** → `backtest_engine.py` orchestrates:
+   - Market filtering
+   - Option selection
+   - Position entry/exit
+   - Greeks tracking
+   - Trade recording
+5. **Results Processing** → Metrics calculation, compliance scoring
+6. **Storage** → CSV format via `csv_enhanced.py`
+7. **Visualization** → Charts via `visualization.py`
+8. **AI Analysis** → OpenAI integration via `ai_openai.py`
+
 ## Key Design Principles
 
 1. **Single Responsibility**: Each module handles one specific aspect of backtesting
@@ -71,3 +118,5 @@ backtest_engine.py
 3. **Testability**: Individual modules can be tested in isolation
 4. **Maintainability**: Changes to one aspect don't require understanding the entire system
 5. **Reusability**: Modules can be used independently for other analysis tasks
+6. **Extensibility**: Easy to add new strategies, indicators, or analysis tools
+7. **Transparency**: Full audit trails and compliance tracking

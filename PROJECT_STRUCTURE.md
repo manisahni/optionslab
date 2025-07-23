@@ -6,10 +6,20 @@
 thetadata-api/
 │
 ├── optionslab/                    # Core backtesting system
-│   ├── auditable_backtest.py     # Main backtesting engine
-│   ├── auditable_gradio_app.py   # Web interface
-│   ├── start_auditable.sh        # Launch script
-│   └── README.md                 # Backtesting documentation
+│   ├── app.py                    # Gradio web interface (main entry)
+│   ├── backtest_engine.py        # Main orchestration engine
+│   ├── data_loader.py            # Data loading utilities
+│   ├── option_selector.py        # Option selection logic
+│   ├── market_filters.py         # Market condition filters
+│   ├── greek_tracker.py          # Greeks tracking
+│   ├── trade_recorder.py         # Trade recording
+│   ├── exit_conditions.py        # Exit logic
+│   ├── backtest_metrics.py       # Performance metrics
+│   ├── visualization.py          # Chart generation
+│   ├── ai_openai.py             # OpenAI integration
+│   ├── csv_enhanced.py          # CSV storage format
+│   ├── data/                    # SPY options data (2020-2025)
+│   └── trade_logs/              # Backtest results storage
 │
 ├── thetadata_client/             # ⚠️ CRITICAL: ThetaData API client
 │   ├── __init__.py              # Package initialization
@@ -31,21 +41,40 @@ thetadata-api/
 │   ├── README.md               # Main documentation
 │   └── API_REFERENCE.md        # API documentation
 │
-├── strategies/                   # Strategy YAML files
-│   ├── simple_test_strategy.yaml
-│   ├── advanced_test_strategy.yaml
-│   └── ...
-│
-└── data/                        # Data storage (gitignored)
-    └── backtest_results/        # Export outputs
+├── simple_test_strategy.yaml     # Default strategy configuration
+├── start_optionslab.sh          # Launch script
+├── requirements.txt             # Python dependencies
+└── .gitignore                   # Git ignore rules
 ```
 
-## Important Notes
+## Key Components
 
-1. **thetadata_client/** - DO NOT DELETE. Contains critical API integration code.
-2. **optionslab/** - Core backtesting system with audit trail capability
-3. **data/** - All data files are gitignored for security and size
-4. **strategies/** - YAML configuration files for different trading strategies
+### 🎯 **optionslab/** - Core System
+- Modular architecture with clean separation of concerns
+- Full audit trail capability
+- AI integration for intelligent analysis
+- Comprehensive visualization suite
+
+### 🤖 **AI Integration**
+- OpenAI API for natural language analysis
+- Strategy compliance checking
+- Performance optimization suggestions
+- Vision capabilities for chart analysis
+
+### 📊 **Data Management**
+- SPY options data from 2020-2025 (parquet format)
+- CSV-based trade logging with full metadata
+- Memorable naming system for backtests
+- Excel-compatible output format
+
+### 🌐 **Web Interface**
+- Gradio-based UI on port 7862
+- Multi-tab interface:
+  - Run Backtest
+  - Visualizations
+  - AI Assistant
+  - AI Viz Analysis
+  - Log Manager
 
 ## Data Flow
 
