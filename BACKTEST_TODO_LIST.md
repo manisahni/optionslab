@@ -18,7 +18,7 @@
 11. **Bollinger Bands** - Volatility-based entry/exit signals
 
 ### Analytics & Export (2 Features)
-12. **Export functionality** - CSV and JSON export for all results
+12. **Export functionality** - Comprehensive CSV export for all results
 13. **Visualization** - 6-panel charts with equity curve, drawdown, P&L distribution, win/loss pie, position count, and exit reasons
 
 ## 📋 REMAINING TASKS

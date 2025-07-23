@@ -63,6 +63,14 @@
       "backtest_date": "2025-07-21T23:35:24.342963",
       "total_return": -0.5017,
       "total_trades": 51
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250722_224404.json",
+      "memorable_name": "Prime Shark-2244",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-22T22:44:04.227326",
+      "total_return": -0.3048,
+      "total_trades": 17
     }
   ],
   "last_updated": "2025-07-21T10:15:00.000000",

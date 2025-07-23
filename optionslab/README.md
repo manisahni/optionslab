@@ -14,7 +14,7 @@ This directory contains the core backtesting system files.
 - Greeks and IV tracking
 - Technical indicators (MA, RSI, Bollinger Bands)
 - Multiple exit strategies
-- Export to CSV/JSON
+- Export to comprehensive CSV format (Excel-compatible)
 - Comprehensive visualization
 
 ## Usage

@@ -33,7 +33,7 @@ python run_backtest_cli.py --strategy long_call --chat
 
 ### 5. Save Everything
 ```bash
-python run_backtest_cli.py --strategy long_call --save-plots --save-json --chat
+python run_backtest_cli.py --strategy long_call --save-plots --save-csv --chat
 ```
 
 ## Available Options
@@ -51,7 +51,7 @@ python run_backtest_cli.py --strategy long_call --save-plots --save-json --chat
 - `--end YYYY-MM-DD` - End date (default: 2025-06-30)
 - `--capital AMOUNT` - Initial capital (default: 100000)
 - `--save-plots` - Save charts to PNG file
-- `--save-json` - Save full results to JSON
+- `--save-csv` - Save full results to comprehensive CSV
 - `--no-ai` - Disable AI analysis
 - `--chat` - Enable interactive AI chat
 
@@ -118,7 +118,7 @@ python run_backtest_cli.py \
   --end 2025-06-30 \
   --capital 50000 \
   --save-plots \
-  --save-json \
+  --save-csv \
   --chat
 ```
 
@@ -126,7 +126,7 @@ python run_backtest_cli.py \
 ```bash
 # Test multiple strategies
 for strategy in long_call long_put covered_call; do
-  python run_backtest_cli.py --strategy $strategy --save-plots --save-json
+  python run_backtest_cli.py --strategy $strategy --save-plots --save-csv
 done
 ```
 

@@ -161,102 +161,61 @@ def get_most_recent_backtest() -> Tuple[Optional[str], Optional[dict]]:
     return None, None
 
 def save_trade_log(trades_df: pd.DataFrame, results: dict, strategy_name: str, 
-                   start_date: str, end_date: str, strategy_config: dict = None) -> tuple[str, str, str]:
-    """Save trade log to permanent storage"""
-    logs_dir = get_trade_logs_dir()
-    now = datetime.now()
-    year_dir = logs_dir / str(now.year)
-    month_dir = year_dir / f"{now.month:02d}"
-    month_dir.mkdir(parents=True, exist_ok=True)
+                   start_date: str, end_date: str, strategy_config: dict = None,
+                   strategy_file_path: str = None, audit_log: str = None) -> tuple[str, str, str]:
+    """Save trade log to permanent storage using comprehensive CSV format"""
+    from .csv_enhanced import save_comprehensive_csv
+    
+    # Get backtest ID from results or generate new one
+    backtest_id = results.get('backtest_id', str(uuid.uuid4()))
     
     memorable_name = generate_memorable_name()
+    results['memorable_name'] = memorable_name
+    results['strategy'] = strategy_name
+    results['start_date'] = start_date
+    results['end_date'] = end_date
     
-    timestamp = now.strftime("%Y%m%d_%H%M%S")
-    base_name = f"trades_{strategy_name}_{start_date}_to_{end_date}_{timestamp}"
-    csv_path = month_dir / f"{base_name}.csv"
-    json_path = month_dir / f"{base_name}.json"
-    plot_path = month_dir / f"{base_name}_dashboard.png"
+    # Load strategy config if not provided
+    if strategy_config is None and strategy_file_path:
+        try:
+            with open(strategy_file_path, 'r') as f:
+                strategy_config = yaml.safe_load(f)
+        except:
+            strategy_config = {}
     
-    # Save CSV
-    if not trades_df.empty:
-        trades_df.to_csv(csv_path, index=False)
-    
-    # Prepare metadata
-    total_return = results.get('total_return', 0)
-    metadata = {
-        'backtest_id': str(uuid.uuid4()),  # Unique identifier
-        'strategy': strategy_name,
-        'start_date': start_date,
-        'end_date': end_date,
-        'backtest_date': now.isoformat(),
-        'memorable_name': memorable_name,
-        'initial_capital': results.get('initial_capital', 10000),
-        'final_value': results.get('final_value', 0),
-        'total_return': total_return,
-        'total_trades': len(trades_df),
-        'win_rate': results.get('win_rate', 0),
-        'json_path': str(json_path),  # Add path to metadata
-        'csv_path': str(csv_path),
-        'compliance_scorecard': results.get('compliance_scorecard', {})  # Add compliance scorecard
-    }
-    
-    # Convert DataFrame to dict and handle timestamps
-    trades_list = []
-    if not trades_df.empty:
-        # Convert to dict first
-        trades_dict = trades_df.to_dict('records')
-        # Convert any timestamps to strings
-        for trade in trades_dict:
-            for key, value in trade.items():
-                # Handle various data types
-                if isinstance(value, pd.Timestamp):
-                    trade[key] = str(value) if pd.notna(value) else None
-                elif isinstance(value, (datetime, date)):
-                    trade[key] = value.isoformat()
-                elif isinstance(value, (np.integer, np.int64, int)):
-                    trade[key] = int(value)
-                elif isinstance(value, (np.floating, np.float64, float)):
-                    # Check for NaN without array ambiguity
-                    if isinstance(value, float) and np.isnan(value):
-                        trade[key] = None
-                    elif hasattr(value, 'item'):  # numpy scalar
-                        v = value.item()
-                        trade[key] = None if np.isnan(v) else float(v)
-                    else:
-                        trade[key] = float(value)
-                elif value is None or (isinstance(value, float) and np.isnan(value)):
-                    trade[key] = None
-                elif hasattr(value, '__len__') and not isinstance(value, str):
-                    # Handle arrays/lists
-                    trade[key] = list(value) if len(value) > 0 else None
-        trades_list = trades_dict
+    # Save comprehensive CSV
+    csv_path = save_comprehensive_csv(
+        backtest_id=backtest_id,
+        trades_df=trades_df,
+        results=results,
+        strategy_config=strategy_config or {},
+        strategy_file_path=strategy_file_path or 'Unknown',
+        audit_log=audit_log
+    )
     
     # Generate and save plot
-    plot_saved = False
+    plot_path = csv_path.replace('.csv', '_dashboard.png')
     if not trades_df.empty:
         try:
+            # Convert to list for visualization
+            trades_list = trades_df.to_dict('records')
             dashboard_plot = create_summary_dashboard(trades_list, results.get('initial_capital', 10000))
             if dashboard_plot:
                 dashboard_plot.savefig(str(plot_path), dpi=150, bbox_inches='tight')
-                plot_saved = True
-                # Add plot path to metadata
-                metadata['plot_path'] = str(plot_path)
         except Exception as e:
             print(f"Warning: Could not generate plot: {e}")
     
-    # Save JSON with trades and metadata
-    json_data = {
-        'metadata': metadata,
-        'trades': trades_list
-    }
+    # Update index with minimal metadata for UI
+    update_trade_log_index(csv_path, {
+        'path': csv_path,
+        'memorable_name': memorable_name,
+        'strategy': strategy_name,
+        'backtest_date': datetime.now().isoformat(),
+        'total_return': results.get('total_return', 0),
+        'total_trades': len(trades_df)
+    })
     
-    with open(json_path, 'w') as f:
-        json.dump(json_data, f, indent=2, default=str)
-    
-    # Update index
-    update_trade_log_index(str(json_path), metadata)
-    
-    return str(csv_path), str(json_path), memorable_name
+    return str(csv_path), str(csv_path), memorable_name  # Return CSV path twice for compatibility
 
 def update_trade_log_index(json_path: str, metadata: dict):
     """Update the central index of trade logs"""
@@ -289,13 +248,14 @@ def update_trade_log_index(json_path: str, metadata: dict):
 def delete_trade_log(log_path: str) -> bool:
     """Delete a trade log permanently"""
     try:
-        json_path = Path(log_path)
-        csv_path = json_path.with_suffix('.csv')
-        plot_path = Path(str(json_path).replace('.json', '_dashboard.png'))
+        csv_path = Path(log_path)
+        # Handle both .csv extension and any other extension
+        if not csv_path.suffix == '.csv':
+            csv_path = csv_path.with_suffix('.csv')
+        
+        plot_path = Path(str(csv_path).replace('.csv', '_dashboard.png'))
         
         # Delete files
-        if json_path.exists():
-            json_path.unlink()
         if csv_path.exists():
             csv_path.unlink()
         if plot_path.exists():
@@ -309,9 +269,9 @@ def delete_trade_log(log_path: str) -> bool:
             with open(index_file, 'r') as f:
                 index_data = json.load(f)
             
-            # Remove from index
+            # Remove from index (match by path)
             index_data['logs'] = [log for log in index_data.get('logs', []) 
-                                 if log['path'] != str(json_path)]
+                                 if log['path'] != str(csv_path)]
             
             with open(index_file, 'w') as f:
                 json.dump(index_data, f, indent=2)
@@ -416,7 +376,8 @@ def run_auditable_backtest_gradio(data_file, strategy_file, start_date, end_date
                 
                 strategy_name = Path(strategy_file).stem.replace('_', '-')
                 perm_csv_path, perm_json_path, memorable_name = save_trade_log(
-                    full_trades_df, results, strategy_name, start_date, end_date
+                    full_trades_df, results, strategy_name, start_date, end_date,
+                    strategy_file_path=strategy_file, audit_log=audit_log
                 )
                 
                 summary += f"\n### 🎯 Backtest Name: **{memorable_name}**"
@@ -667,10 +628,12 @@ def create_simple_interface():
                 return None, "No backtest selected"
             
             try:
-                with open(selected_path, 'r') as f:
-                    data = json.load(f)
+                from .csv_enhanced import load_comprehensive_csv
                 
-                metadata = data.get('metadata', {})
+                # Load from CSV file
+                csv_data = load_comprehensive_csv(selected_path)
+                
+                metadata = csv_data.get('metadata', {})
                 memorable_name = metadata.get('memorable_name', 'Unknown')
                 total_return = metadata.get('total_return', 0)
                 total_trades = metadata.get('total_trades', 0)
@@ -683,6 +646,12 @@ def create_simple_interface():
 - **Win Rate:** {win_rate:.1%}
 - **Date:** {metadata.get('backtest_date', 'Unknown')[:10]}
 """
+                # Convert to format expected by existing code
+                data = {
+                    'metadata': metadata,
+                    'trades': csv_data.get('trades', pd.DataFrame()).to_dict('records') if not csv_data.get('trades', pd.DataFrame()).empty else []
+                }
+                
                 return data, info
             except Exception as e:
                 return None, f"Error loading backtest: {str(e)}"
