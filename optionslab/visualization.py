@@ -268,14 +268,17 @@ def plot_trade_markers(trades: List[Dict], show_underlying: bool = True) -> go.F
         color = 'green' if trade['pnl'] > 0 else 'red'
         
         # Option price line
+        # Handle both 'option_price' and 'entry_price' column names
+        entry_price = trade.get('option_price', trade.get('entry_price', 0))
+        
         fig.add_trace(go.Scatter(
             x=[trade['entry_date'], trade['exit_date']],
-            y=[trade['option_price'], trade['exit_price']],
+            y=[entry_price, trade['exit_price']],
             mode='lines+markers',
             name=f"Trade {trade['trade_id']}",
             line=dict(color=color, width=2),
             marker=dict(size=10),
-            text=[f"Entry: ${trade['option_price']:.2f}<br>Strike: ${trade['strike']:.0f}",
+            text=[f"Entry: ${entry_price:.2f}<br>Strike: ${trade['strike']:.0f}",
                   f"Exit: ${trade['exit_price']:.2f}<br>P&L: ${trade['pnl']:.2f}"],
             hovertemplate='%{text}<extra></extra>',
             showlegend=False

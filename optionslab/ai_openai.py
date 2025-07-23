@@ -677,8 +677,18 @@ COMPLETE TRADE LOG:
         for idx, trade in trades_to_show.iterrows():
             trade_data += f"\n--- Trade {trade.get('trade_id', idx)} ---\n"
             for col, val in trade.items():
-                if pd.notna(val) and col != 'greeks_history':  # Skip large columns
-                    trade_data += f"{col}: {val}\n"
+                # Skip large columns and handle array values
+                if col != 'greeks_history':
+                    try:
+                        # Check if it's a scalar value or array
+                        if isinstance(val, (list, np.ndarray)):
+                            if len(val) > 0:
+                                trade_data += f"{col}: {val}\n"
+                        elif pd.notna(val):
+                            trade_data += f"{col}: {val}\n"
+                    except:
+                        # If any error, just convert to string
+                        trade_data += f"{col}: {str(val)}\n"
         
         # Summary for remaining trades
         if not remaining_trades.empty:

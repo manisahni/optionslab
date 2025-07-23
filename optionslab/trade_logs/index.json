@@ -1,78 +1,22 @@
 {
   "logs": [
     {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2023-12-31_20250721_171422.json",
-      "memorable_name": "Light Cheetah-1714",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T17:14:22.408544",
-      "total_return": 0.2024,
-      "total_trades": 45
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/17cc0ae9-10b5-453f-aa53-986ad87968fd_test_backtest_20250722_231610.csv",
+      "memorable_name": "test_backtest",
+      "strategy": "TestStrategy",
+      "backtest_date": "2025-07-22T23:16:10.542329",
+      "total_return": 0.0075,
+      "total_trades": 2
     },
     {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_175455.json",
-      "memorable_name": "Calm Orca-1754",
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/f67a1fb2-700c-41c7-92e9-8516dbb809e1_Ice Lynx-1444_20250723_144444.csv",
+      "memorable_name": "Ice Lynx-1444",
       "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T17:54:55.248588",
-      "total_return": -0.1138,
-      "total_trades": 4
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2023-12-31_20250721_175517.json",
-      "memorable_name": "Ancient Dragon-1755",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T17:55:17.498684",
-      "total_return": 0.2024,
-      "total_trades": 45
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250721_183350.json",
-      "memorable_name": "Thunder Phoenix-1833",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T18:33:50.097286",
-      "total_return": -0.1138,
-      "total_trades": 4
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2021-01-01_to_2024-12-31_20250721_190820.json",
-      "memorable_name": "Clever Raven-1908",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T19:08:20.301544",
-      "total_return": 0.7598,
-      "total_trades": 163
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2021-01-01_to_2024-12-31_20250721_191246.json",
-      "memorable_name": "Light Stallion-1912",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T19:12:46.310850",
-      "total_return": 0.7598,
-      "total_trades": 163
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2023-12-31_20250721_203022.json",
-      "memorable_name": "Steady Shark-2030",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-21T20:30:22.554850",
-      "total_return": 0.2024,
-      "total_trades": 45
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_advanced-test-strategy_2022-01-01_to_2022-12-31_20250721_233524.json",
-      "memorable_name": "Stellar Falcon-2335",
-      "strategy": "advanced-test-strategy",
-      "backtest_date": "2025-07-21T23:35:24.342963",
-      "total_return": -0.5017,
-      "total_trades": 51
-    },
-    {
-      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/trades_simple-test-strategy_2022-01-01_to_2022-12-31_20250722_224404.json",
-      "memorable_name": "Prime Shark-2244",
-      "strategy": "simple-test-strategy",
-      "backtest_date": "2025-07-22T22:44:04.227326",
+      "backtest_date": "2025-07-23T14:44:44.946234",
       "total_return": -0.3048,
       "total_trades": 17
     }
   ],
-  "last_updated": "2025-07-21T10:15:00.000000",
-  "version": "1.0"
+  "last_updated": "2025-07-23T12:00:00.000000",
+  "version": "2.0"
 }

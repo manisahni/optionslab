@@ -107,11 +107,35 @@ def save_comprehensive_csv(
         # Add backtest ID to each trade
         trades_df['backtest_id'] = backtest_id
         
+        # Convert date/timestamp columns to strings
+        date_columns = ['entry_date', 'exit_date', 'expiration']
+        for col in date_columns:
+            if col in trades_df.columns:
+                trades_df[col] = trades_df[col].apply(
+                    lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else str(x) if pd.notna(x) else ''
+                )
+        
         # Convert Greeks history to JSON strings if present
         if 'greeks_history' in trades_df.columns:
-            trades_df['greeks_history'] = trades_df['greeks_history'].apply(
-                lambda x: json.dumps(x) if isinstance(x, (list, dict)) else str(x)
-            )
+            def serialize_greeks_history(x):
+                if isinstance(x, (list, dict)):
+                    # Convert Timestamps to strings in the data structure
+                    def convert_timestamps(obj):
+                        if isinstance(obj, pd.Timestamp):
+                            return obj.isoformat()
+                        elif isinstance(obj, dict):
+                            return {k: convert_timestamps(v) for k, v in obj.items()}
+                        elif isinstance(obj, list):
+                            return [convert_timestamps(item) for item in obj]
+                        else:
+                            return obj
+                    
+                    converted = convert_timestamps(x)
+                    return json.dumps(converted)
+                else:
+                    return str(x)
+            
+            trades_df['greeks_history'] = trades_df['greeks_history'].apply(serialize_greeks_history)
         
         # Write trade data
         trades_df.to_csv(csv_buffer, index=False)
@@ -224,7 +248,15 @@ def load_comprehensive_csv(filepath: str) -> Dict:
     # Load trade data
     trade_lines = ''.join(lines[trade_data_start:])
     if trade_lines.strip():
-        trades_df = pd.read_csv(io.StringIO(trade_lines))
+        try:
+            trades_df = pd.read_csv(io.StringIO(trade_lines))
+        except pd.errors.ParserError as e:
+            # If there's a parsing error, try to clean up the data
+            print(f"Warning: CSV parsing error, attempting to fix: {e}")
+            # Remove any remaining comment lines
+            clean_lines = [line for line in lines[trade_data_start:] if not line.strip().startswith('#')]
+            trade_lines = ''.join(clean_lines)
+            trades_df = pd.read_csv(io.StringIO(trade_lines))
         
         # Parse JSON columns
         if 'greeks_history' in trades_df.columns:
