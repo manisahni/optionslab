@@ -32,9 +32,15 @@ def plotly_to_base64(fig: go.Figure, format: str = 'png', width: int = 1200, hei
         return img_base64
         
     except Exception as e:
-        print(f"Error converting Plotly figure to base64: {e}")
-        traceback.print_exc()
-        return None
+        # Check if it's a Chrome/Kaleido issue
+        if "Chrome" in str(e) or "kaleido" in str(e).lower():
+            print(f"Note: Chrome not available for image export. AI will analyze code instead.")
+            # Return a placeholder or None
+            return None
+        else:
+            print(f"Error converting Plotly figure to base64: {e}")
+            traceback.print_exc()
+            return None
 
 
 def get_visualization_code(function_name: str) -> Optional[str]:
@@ -105,12 +111,16 @@ def create_ai_visualization_prompt(context: Dict) -> str:
     Returns:
         Formatted prompt string
     """
+    image_note = ""
+    if not context.get('image_base64'):
+        image_note = "\n**Note**: Visual preview not available. Please analyze the code and data structure to identify issues.\n"
+    
     prompt = f"""
 Please analyze this visualization and provide improvements:
 
 **Function**: {context['function_name']}
 **Issue**: {context['error_description']}
-
+{image_note}
 **Current Implementation**:
 ```python
 {context['source_code']}
@@ -124,7 +134,7 @@ Total Trades: {context['data_structure']['total_trades']}
 {context['trades_sample']}
 
 Please provide:
-1. Analysis of what's wrong with the current visualization
+1. Analysis of what's wrong with the current visualization based on the code and data
 2. Complete corrected Python code for the function
 3. Explanation of the fixes applied
 """
