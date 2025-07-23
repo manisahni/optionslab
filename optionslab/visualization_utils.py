@@ -47,7 +47,7 @@ def get_visualization_code(function_name: str) -> Optional[str]:
     """Get the source code of a visualization function for AI analysis
     
     Args:
-        function_name: Name of the visualization function
+        function_name: Name of the visualization function or chart type
         
     Returns:
         Source code as string or None if not found
@@ -56,10 +56,32 @@ def get_visualization_code(function_name: str) -> Optional[str]:
         import inspect
         from . import visualization
         
+        # Map chart types to function names
+        function_map = {
+            'pnl_curve': 'plot_pnl_curve',
+            'trade_markers': 'plot_trade_markers',
+            'win_loss': 'plot_win_loss_distribution',
+            'heatmap': 'plot_strategy_heatmap',
+            'dashboard': 'create_summary_dashboard',
+            'delta_histogram': 'plot_delta_histogram',
+            'dte_histogram': 'plot_dte_histogram',
+            'compliance_scorecard': 'plot_compliance_scorecard',
+            'coverage_heatmap': 'plot_option_coverage_heatmap',
+            'delta_timeline': 'plot_delta_coverage_time_series',
+            'dte_timeline': 'plot_dte_coverage_time_series',
+            'exit_distribution': 'plot_exit_reason_distribution',
+            'exit_efficiency': 'plot_exit_efficiency_heatmap',
+            'greeks_evolution': 'plot_greeks_evolution',
+            'technical_indicators': 'plot_technical_indicators_dashboard'
+        }
+        
+        # Convert chart type to function name if needed
+        actual_function_name = function_map.get(function_name, function_name)
+        
         # Get the function object
-        func = getattr(visualization, function_name, None)
+        func = getattr(visualization, actual_function_name, None)
         if func is None:
-            return None
+            return f"# Function '{actual_function_name}' not found in visualization module"
             
         # Get source code
         source = inspect.getsource(func)
@@ -67,7 +89,7 @@ def get_visualization_code(function_name: str) -> Optional[str]:
         
     except Exception as e:
         print(f"Error getting visualization code: {e}")
-        return None
+        return f"# Error retrieving source code: {str(e)}"
 
 
 def prepare_visualization_context(
