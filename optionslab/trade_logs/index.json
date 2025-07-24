@@ -23,6 +23,14 @@
       "backtest_date": "2025-07-23T22:45:14.907597",
       "total_return": -0.3048,
       "total_trades": 17
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/c93cdcd2-fb22-4b9d-9c7e-7efc0a412099_Steady Viper-1146_20250724_114645.csv",
+      "memorable_name": "Steady Viper-1146",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-24T11:46:45.796459",
+      "total_return": -0.3048,
+      "total_trades": 17
     }
   ],
   "last_updated": "2025-07-23T12:00:00.000000",

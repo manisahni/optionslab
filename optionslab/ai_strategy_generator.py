@@ -126,7 +126,8 @@ Make the strategy realistic and practical. Adjust all parameters based on the st
             with open(filepath, 'w') as f:
                 yaml.dump(strategy_config, f, default_flow_style=False, sort_keys=False)
             
-            return str(filepath), strategy_config
+            # Return YAML content (not filepath) and config
+            return yaml_content, strategy_config
             
         except Exception as e:
             raise Exception(f"Failed to generate strategy: {str(e)}")

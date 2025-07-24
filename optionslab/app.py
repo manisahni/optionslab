@@ -17,6 +17,7 @@ import os
 import shutil
 import random
 import uuid
+import re
 from typing import List, Dict, Optional, Tuple
 import plotly.graph_objects as go
 import plotly.express as px
@@ -48,6 +49,7 @@ from .visualization import (
 )
 from .ai_openai import get_openai_assistant
 from .ai_strategy_generator import get_strategy_generator
+from .data_scientist_engine import DataScientistEngine
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -140,6 +142,42 @@ def format_backtest_dropdown_choice(log_data: dict) -> Tuple[str, str]:
     
     label = f"🎯 {memorable_name} | {total_return:.1%} {perf_emoji} | {backtest_date}"
     return (label, log_data['path'])
+
+def validate_yaml_content(yaml_content: str) -> Tuple[bool, str, Optional[dict]]:
+    """Validate YAML content and return validation status, message, and parsed config"""
+    try:
+        if not yaml_content.strip():
+            return False, "YAML content is empty", None
+            
+        # Parse YAML
+        config = yaml.safe_load(yaml_content)
+        
+        if not isinstance(config, dict):
+            return False, "Invalid YAML structure - must be a dictionary", None
+            
+        # Check required fields
+        required_fields = ['name', 'type', 'parameters', 'entry_rules', 'exit_rules']
+        missing_fields = [field for field in required_fields if field not in config]
+        
+        if missing_fields:
+            return False, f"Missing required fields: {', '.join(missing_fields)}", None
+            
+        # Basic structure validation
+        if not isinstance(config.get('parameters'), dict):
+            return False, "Invalid 'parameters' section - must be a dictionary", None
+            
+        if not isinstance(config.get('entry_rules'), dict):
+            return False, "Invalid 'entry_rules' section - must be a dictionary", None
+            
+        if not isinstance(config.get('exit_rules'), dict):
+            return False, "Invalid 'exit_rules' section - must be a dictionary", None
+            
+        return True, "✅ Valid YAML structure", config
+        
+    except yaml.YAMLError as e:
+        return False, f"YAML parsing error: {str(e)}", None
+    except Exception as e:
+        return False, f"Validation error: {str(e)}", None
 
 def get_all_trade_logs() -> List[dict]:
     """Get all trade logs from index"""
@@ -665,83 +703,97 @@ def create_simple_interface():
                         gr.Markdown("### 📈 Improved Visualization")
                         improved_viz_plot = gr.Plot(label="Improved Plot")
             
-            # AI Strategy Generator Tab
-            with gr.TabItem("🤖 Strategy Generator", id=4):
+            # YAML Editor Tab (with AI Generation)
+            with gr.TabItem("📝 Strategy Editor", id=4):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("### 🧠 AI Strategy Generator")
-                        gr.Markdown("Describe your ideal trading strategy in plain English, and I'll help you create it!")
+                        gr.Markdown("### 📂 Strategy Management")
                         
-                        # Quick start options
-                        gr.Markdown("### 🚀 Quick Start")
-                        
-                        # Template-based generation
-                        template_dropdown = gr.Dropdown(
-                            choices=[
-                                ("Conservative Put Selling", "conservative_put_selling"),
-                                ("Aggressive Call Buying", "aggressive_call_buying"),
-                                ("Iron Condor", "iron_condor"),
-                                ("Custom Strategy", "custom")
-                            ],
-                            label="Start with a Template",
-                            value="custom"
+                        # Strategy selector
+                        yaml_strategies = get_available_strategies()
+                        yaml_strategy_dropdown = gr.Dropdown(
+                            choices=yaml_strategies,
+                            label="Select Strategy",
+                            value=yaml_strategies[0][1] if yaml_strategies and yaml_strategies[0][1] else None
                         )
                         
                         with gr.Row():
-                            start_template_btn = gr.Button("📋 Start from Template", variant="secondary")
-                            start_fresh_btn = gr.Button("💬 Start Fresh Conversation", variant="primary")
-                        
-                        gr.Markdown("### 📊 Recent AI Strategies")
-                        recent_strategies = gr.Dataframe(
-                            headers=["Name", "Type", "Created"],
-                            label="Recent AI-Generated Strategies",
-                            interactive=False
-                        )
-                        
-                        refresh_strategies_btn = gr.Button("🔄 Refresh List", size="sm")
-                        
-                        # Hidden state for conversation context
-                        strategy_context = gr.State({})
-                    
-                    with gr.Column(scale=2):
-                        gr.Markdown("### 💬 Strategy Development Chat")
-                        
-                        # Chat interface
-                        strategy_chatbot = gr.Chatbot(
-                            height=400,
-                            type="messages",
-                            show_label=False,
-                            elem_id="strategy_chatbot"
-                        )
+                            yaml_load_btn = gr.Button("📥 Load", size="sm", variant="primary")
+                            yaml_new_btn = gr.Button("🆕 New", size="sm")
                         
                         with gr.Row():
-                            strategy_msg_input = gr.Textbox(
-                                label="Message",
-                                placeholder="E.g., 'I want a conservative strategy for monthly income' or 'Help me create an aggressive growth strategy'",
-                                lines=2,
-                                scale=4
-                            )
-                            send_strategy_msg_btn = gr.Button("📤 Send", scale=1, variant="primary")
+                            yaml_delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
+                            yaml_refresh_btn = gr.Button("🔄 Refresh", size="sm")
                         
-                        # Strategy output section
-                        with gr.Accordion("📝 Generated Strategy", open=True):
-                            strategy_output = gr.Textbox(
-                                label="Strategy YAML",
-                                lines=15,
-                                max_lines=25,
-                                interactive=True,
-                                placeholder="Your strategy will appear here once generated..."
+                        # AI Generation Section
+                        with gr.Accordion("🤖 AI Generate", open=False) as ai_accordion:
+                            strategy_type_ai = gr.Dropdown(
+                                choices=[
+                                    ("Long Call - Buy calls", "long_call"),
+                                    ("Short Put - Sell puts", "short_put"),
+                                    ("Iron Condor - Neutral strategy", "iron_condor"),
+                                    ("Call Spread - Bullish spread", "call_spread"),
+                                    ("Put Spread - Bearish spread", "put_spread"),
+                                    ("Custom - Describe your own", "custom")
+                                ],
+                                label="Strategy Type",
+                                value="long_call"
                             )
                             
-                            with gr.Row():
-                                strategy_name = gr.Textbox(
-                                    label="Strategy Name",
-                                    interactive=True,
-                                    scale=3
-                                )
-                                save_strategy_btn = gr.Button("💾 Save Strategy", variant="primary", scale=1)
+                            risk_level_ai = gr.Dropdown(
+                                choices=[
+                                    ("Conservative - Lower risk", "conservative"),
+                                    ("Moderate - Balanced risk", "moderate"),
+                                    ("Aggressive - Higher risk", "aggressive")
+                                ],
+                                label="Risk Level",
+                                value="moderate"
+                            )
                             
-                            generation_status = gr.Markdown("")
+                            ai_description = gr.Textbox(
+                                label="Quick Description (optional)",
+                                placeholder="E.g., Monthly income with 45 DTE puts",
+                                lines=2
+                            )
+                            
+                            generate_ai_btn = gr.Button("✨ Generate Strategy", variant="primary")
+                            ai_status = gr.Markdown("")
+                        
+                        gr.Markdown("### 💾 Save Options")
+                        yaml_save_name = gr.Textbox(
+                            label="Strategy Name",
+                            placeholder="My Custom Strategy",
+                            value=""
+                        )
+                        
+                        yaml_save_btn = gr.Button("💾 Save Strategy", variant="primary")
+                        
+                        yaml_status = gr.Markdown("")
+                        
+                    with gr.Column(scale=3):
+                        gr.Markdown("### ✏️ YAML Editor")
+                        
+                        yaml_editor = gr.Textbox(
+                            label="",
+                            lines=30,
+                            max_lines=40,
+                            placeholder="""Paste your YAML strategy here or load an existing one...
+
+Example structure:
+name: "My Strategy"
+type: "long_call"
+parameters:
+  initial_capital: 10000
+  position_size: 0.1
+  ...
+
+Or use the AI Generate option to create a strategy automatically!
+""",
+                            elem_classes=["monospace"],
+                            interactive=True
+                        )
+                        
+                        yaml_validation_status = gr.Markdown("ℹ️ Ready to edit")
             
             # Log Manager Tab
             with gr.TabItem("📁 Log Manager", id=5):
@@ -758,6 +810,79 @@ def create_simple_interface():
                         
                         gr.Markdown("### 📊 Selected Log Details")
                         log_info_df = gr.DataFrame()
+            
+            # Data Scientist Agent Tab
+            with gr.TabItem("🔬 Data Scientist", id=6):
+                # Initialize engine
+                data_scientist = DataScientistEngine()
+                
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 🔬 Data Analysis Agent")
+                        gr.Markdown("Ask questions about SPY options data using natural language")
+                        
+                        # Query input
+                        ds_query_input = gr.Textbox(
+                            label="Your Question",
+                            placeholder="E.g., 'Show me the IV smile for next month expiration' or 'Analyze gamma exposure for today'",
+                            lines=3
+                        )
+                        
+                        # Date context
+                        ds_date_input = gr.Textbox(
+                            label="Date Context (optional)",
+                            placeholder="YYYY-MM-DD (defaults to today)",
+                            value=""
+                        )
+                        
+                        analyze_btn = gr.Button("🔍 Analyze", variant="primary", size="lg")
+                        
+                        # Quick analysis buttons
+                        gr.Markdown("### 🚀 Quick Analysis")
+                        
+                        with gr.Row():
+                            iv_analysis_btn = gr.Button("📊 IV Analysis", size="sm")
+                            gamma_btn = gr.Button("🎯 Gamma Exposure", size="sm")
+                        
+                        with gr.Row():
+                            flow_btn = gr.Button("💹 Option Flow", size="sm")
+                            market_btn = gr.Button("📈 Market Summary", size="sm")
+                        
+                        # Analysis status
+                        ds_status = gr.Markdown("")
+                        
+                    with gr.Column(scale=3):
+                        # Results display
+                        gr.Markdown("### 📊 Analysis Results")
+                        
+                        # Insights display
+                        insights_display = gr.Markdown("*Ask a question to see insights...*")
+                        
+                        # Visualization tabs
+                        with gr.Tabs():
+                            with gr.TabItem("Charts"):
+                                chart_output = gr.Plot(label="Visualization")
+                                
+                            with gr.TabItem("Data Table"):
+                                data_table = gr.DataFrame(
+                                    label="Data",
+                                    interactive=False
+                                )
+                            
+                            with gr.TabItem("Additional Charts"):
+                                chart_output2 = gr.Plot(label="Additional Visualization")
+                                chart_output3 = gr.Plot(label="More Visualization")
+                        
+                        # Export options
+                        with gr.Row():
+                            export_csv_btn = gr.Button("💾 Export CSV", size="sm")
+                            export_code_btn = gr.Button("🐍 Export Code", size="sm")
+                            
+                        export_output = gr.Textbox(
+                            label="Export",
+                            visible=False,
+                            lines=10
+                        )
         
         # ========================================================================
         # EVENT HANDLERS
@@ -1405,158 +1530,330 @@ What would you like to explore?"""
         # ========================================================================
         
         
-        def get_recent_ai_strategies():
-            """Get dataframe of recent AI-generated strategies"""
+        # YAML Editor handler functions
+        def load_strategy_yaml(strategy_path):
+            """Load selected strategy into YAML editor"""
             try:
-                generator = get_strategy_generator()
-                strategies = generator.get_generated_strategies()
+                if not strategy_path:
+                    return "", "", "❌ No strategy selected"
                 
-                # Format for display
-                display_data = []
-                for strategy in strategies[:10]:  # Show latest 10
-                    created_time = datetime.fromtimestamp(strategy['created']).strftime("%Y-%m-%d %H:%M")
-                    display_data.append([
-                        strategy['name'],
-                        strategy['type'],
-                        created_time
-                    ])
+                with open(strategy_path, 'r') as f:
+                    yaml_content = f.read()
                 
-                return pd.DataFrame(display_data, columns=["Name", "Type", "Created"])
-            except:
-                return pd.DataFrame(columns=["Name", "Type", "Created"])
-        
-        # New conversational strategy generator functions
-        def start_strategy_conversation(template_name, chat_history, context):
-            """Start a new strategy conversation"""
-            chat_history = []
-            
-            if template_name == "custom":
-                chat_history.append({
-                    "role": "assistant", 
-                    "content": """👋 Hi! I'm here to help you create a custom options trading strategy. 
-
-Let's start with the basics. Could you tell me:
-1. What's your main goal? (e.g., monthly income, capital growth, hedging)
-2. What's your risk tolerance? (conservative, moderate, or aggressive)
-3. Do you have any specific strategies in mind? (e.g., selling puts, buying calls, spreads)
-
-Feel free to describe your ideal strategy in your own words!"""
-                })
-                context = {"mode": "custom", "stage": "initial"}
-            else:
-                # Start with template
-                chat_history.append({
-                    "role": "assistant",
-                    "content": f"""👋 I see you're interested in the {template_name.replace('_', ' ').title()} strategy. This is a great choice!
-
-Let me help you customize it for your needs. A few questions:
-1. What's your typical account size? (This helps with position sizing)
-2. How many positions do you want to manage at once?
-3. Any specific stocks or ETFs you prefer to trade?
-
-I'll create a personalized version of this strategy based on your preferences."""
-                })
-                context = {"mode": "template", "template": template_name, "stage": "customization"}
-            
-            return chat_history, context, "", "", ""
-        
-        def chat_strategy_development(message, chat_history, context, current_yaml):
-            """Handle strategy development conversation"""
-            if not chat_history:
-                chat_history = []
-            
-            # Add user message
-            chat_history.append({"role": "user", "content": message})
-            
-            try:
-                generator = get_strategy_generator()
+                # Extract name from YAML
+                config = yaml.safe_load(yaml_content)
+                strategy_name = config.get('name', Path(strategy_path).stem)
                 
-                # Analyze conversation and generate/update strategy
-                response, updated_context, yaml_content, strategy_name = generator.process_conversation(
-                    message, chat_history, context, current_yaml
-                )
-                
-                # Add AI response
-                chat_history.append({"role": "assistant", "content": response})
-                
-                # Update status if strategy was generated
-                status = ""
-                if yaml_content and yaml_content != current_yaml:
-                    status = "✅ Strategy updated based on your requirements"
-                
-                return chat_history, "", updated_context, yaml_content, strategy_name, status
-                
+                return yaml_content, strategy_name, "✅ Strategy loaded successfully"
             except Exception as e:
-                chat_history.append({
-                    "role": "assistant", 
-                    "content": f"❌ I encountered an error: {str(e)}. Let's try again. Could you rephrase your request?"
-                })
-                return chat_history, "", context, current_yaml, "", ""
+                return "", "", f"❌ Error loading strategy: {str(e)}"
         
-        def save_generated_strategy(yaml_content, strategy_name):
-            """Save the generated strategy to file"""
+        def save_strategy_yaml(yaml_content, save_name):
+            """Save YAML content with validation"""
             try:
-                if not yaml_content:
-                    return "❌ No strategy to save. Please generate a strategy first."
+                # Validate YAML first
+                is_valid, message, config = validate_yaml_content(yaml_content)
                 
-                generator = get_strategy_generator()
-                
-                # Parse YAML to ensure it's valid
-                import yaml
-                strategy_config = yaml.safe_load(yaml_content)
+                if not is_valid:
+                    return message, gr.update(), message
                 
                 # Update name if provided
-                if strategy_name:
-                    strategy_config['name'] = strategy_name
+                if save_name:
+                    config['name'] = save_name
+                    # Update YAML content with new name
+                    yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
                 
                 # Generate filename
+                safe_name = re.sub(r'[^\w\s-]', '', save_name or config.get('name', 'strategy'))
+                safe_name = re.sub(r'[-\s]+', '-', safe_name).lower()
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                unique_id = str(uuid.uuid4())[:8]
-                filename = f"ai_strategy_{timestamp}_{unique_id}.yaml"
-                filepath = generator.strategies_dir / filename
+                filename = f"{safe_name}_{timestamp}.yaml"
                 
-                # Save file
+                # Save to ai_strategies directory
+                strategies_dir = Path(__file__).parent / "ai_strategies"
+                strategies_dir.mkdir(exist_ok=True)
+                filepath = strategies_dir / filename
+                
+                # Check if file exists
+                if filepath.exists():
+                    return "❌ File already exists. Please use a different name.", gr.update(), message
+                
                 with open(filepath, 'w') as f:
-                    yaml.dump(strategy_config, f, default_flow_style=False, sort_keys=False)
+                    f.write(yaml_content)
                 
-                return f"✅ Strategy saved successfully to: {filename}", get_recent_ai_strategies()
+                # Refresh strategies list
+                new_strategies = get_available_strategies()
+                
+                return f"✅ Strategy saved to: {filename}", gr.update(choices=new_strategies, value=str(filepath)), message
                 
             except Exception as e:
-                return f"❌ Error saving strategy: {str(e)}", get_recent_ai_strategies()
+                return f"❌ Error saving strategy: {str(e)}", gr.update(), message
         
-        # Connect AI Strategy Generator handlers
-        start_template_btn.click(
-            fn=start_strategy_conversation,
-            inputs=[template_dropdown, strategy_chatbot, strategy_context],
-            outputs=[strategy_chatbot, strategy_context, strategy_output, strategy_name, generation_status]
+        def delete_strategy_yaml(strategy_path):
+            """Delete selected strategy with confirmation"""
+            try:
+                if not strategy_path:
+                    return "❌ No strategy selected", gr.update()
+                
+                path = Path(strategy_path)
+                if not path.exists():
+                    return "❌ Strategy file not found", gr.update()
+                
+                # Don't allow deletion of the main test strategy
+                if path.name == "simple_test_strategy.yaml":
+                    return "❌ Cannot delete the default test strategy", gr.update()
+                
+                # Delete the file
+                path.unlink()
+                
+                # Refresh strategies list
+                new_strategies = get_available_strategies()
+                new_value = new_strategies[0][1] if new_strategies and new_strategies[0][1] else None
+                
+                return f"✅ Strategy deleted: {path.name}", gr.update(choices=new_strategies, value=new_value)
+                
+            except Exception as e:
+                return f"❌ Error deleting strategy: {str(e)}", gr.update()
+        
+        def clear_yaml_editor():
+            """Clear the YAML editor for new strategy"""
+            return "", "", "ℹ️ Ready for new strategy"
+        
+        def validate_yaml_live(yaml_content):
+            """Live validation of YAML content"""
+            if not yaml_content.strip():
+                return "ℹ️ Ready to edit"
+            
+            is_valid, message, _ = validate_yaml_content(yaml_content)
+            return message
+        
+        def generate_ai_strategy_simple(strategy_type, risk_level, description):
+            """Simple AI strategy generation without chat"""
+            try:
+                generator = get_strategy_generator()
+                
+                # Set default parameters based on risk level
+                if risk_level == "conservative":
+                    dte_range = (30, 60)
+                    delta_range = (0.2, 0.3)
+                    position_size = 0.05
+                    max_positions = 3
+                elif risk_level == "aggressive":
+                    dte_range = (7, 30)
+                    delta_range = (0.4, 0.6)
+                    position_size = 0.15
+                    max_positions = 8
+                else:  # moderate
+                    dte_range = (20, 45)
+                    delta_range = (0.3, 0.4)
+                    position_size = 0.10
+                    max_positions = 5
+                
+                # Generate the strategy
+                yaml_content, config = generator.generate_strategy(
+                    strategy_type=strategy_type,
+                    risk_level=risk_level,
+                    target_dte_range=dte_range,
+                    target_delta_range=delta_range,
+                    max_positions=max_positions,
+                    position_size=position_size,
+                    special_instructions=description
+                )
+                
+                # Extract name from config
+                strategy_name = config.get('name', 'Generated Strategy')
+                
+                return yaml_content, strategy_name, "✅ Strategy generated successfully!"
+                
+            except Exception as e:
+                return "", "", f"❌ Error generating strategy: {str(e)}"
+        
+        
+        # Connect YAML Editor handlers
+        yaml_load_btn.click(
+            fn=load_strategy_yaml,
+            inputs=[yaml_strategy_dropdown],
+            outputs=[yaml_editor, yaml_save_name, yaml_status]
         )
         
-        start_fresh_btn.click(
-            fn=lambda: start_strategy_conversation("custom", [], {}),
-            outputs=[strategy_chatbot, strategy_context, strategy_output, strategy_name, generation_status]
+        yaml_new_btn.click(
+            fn=clear_yaml_editor,
+            outputs=[yaml_editor, yaml_save_name, yaml_status]
         )
         
-        send_strategy_msg_btn.click(
-            fn=chat_strategy_development,
-            inputs=[strategy_msg_input, strategy_chatbot, strategy_context, strategy_output],
-            outputs=[strategy_chatbot, strategy_msg_input, strategy_context, strategy_output, strategy_name, generation_status]
+        yaml_save_btn.click(
+            fn=save_strategy_yaml,
+            inputs=[yaml_editor, yaml_save_name],
+            outputs=[yaml_status, yaml_strategy_dropdown, yaml_validation_status]
+        ).then(
+            fn=get_available_strategies,
+            outputs=[strategy_dropdown]  # Update main backtest dropdown too
         )
         
-        strategy_msg_input.submit(
-            fn=chat_strategy_development,
-            inputs=[strategy_msg_input, strategy_chatbot, strategy_context, strategy_output],
-            outputs=[strategy_chatbot, strategy_msg_input, strategy_context, strategy_output, strategy_name, generation_status]
+        yaml_delete_btn.click(
+            fn=delete_strategy_yaml,
+            inputs=[yaml_strategy_dropdown],
+            outputs=[yaml_status, yaml_strategy_dropdown]
+        ).then(
+            fn=get_available_strategies,
+            outputs=[strategy_dropdown]  # Update main backtest dropdown too
         )
         
-        save_strategy_btn.click(
-            fn=save_generated_strategy,
-            inputs=[strategy_output, strategy_name],
-            outputs=[generation_status, recent_strategies]
+        yaml_refresh_btn.click(
+            fn=get_available_strategies,
+            outputs=[yaml_strategy_dropdown]
         )
         
-        refresh_strategies_btn.click(
-            fn=get_recent_ai_strategies,
-            outputs=[recent_strategies]
+        # Live YAML validation
+        yaml_editor.change(
+            fn=validate_yaml_live,
+            inputs=[yaml_editor],
+            outputs=[yaml_validation_status]
+        )
+        
+        # AI Generation handler
+        generate_ai_btn.click(
+            fn=generate_ai_strategy_simple,
+            inputs=[strategy_type_ai, risk_level_ai, ai_description],
+            outputs=[yaml_editor, yaml_save_name, ai_status]
+        )
+        
+        # Data Scientist handlers
+        def analyze_data_query(query, date_context):
+            """Process data analysis query"""
+            try:
+                if not query:
+                    return "Please enter a question", "", None, None, None, None
+                
+                # Show processing status
+                status = "🔄 Analyzing data..."
+                
+                # Process query
+                result = data_scientist.process_natural_language_query(query, date_context or None)
+                
+                if not result['success']:
+                    return result.get('message', 'Analysis failed'), "", None, None, None, None
+                
+                # Format insights
+                insights_text = "### 💡 Key Insights\n\n"
+                for insight in result.get('insights', []):
+                    insights_text += f"• {insight}\n"
+                
+                # Get visualizations
+                visualizations = result.get('visualizations', [])
+                chart1 = visualizations[0][1] if len(visualizations) > 0 else None
+                chart2 = visualizations[1][1] if len(visualizations) > 1 else None
+                chart3 = visualizations[2][1] if len(visualizations) > 2 else None
+                
+                # Get data table
+                data_df = result.get('data', pd.DataFrame())
+                if isinstance(data_df, pd.DataFrame) and not data_df.empty:
+                    # Limit columns for display
+                    display_cols = ['strike', 'expiration', 'right', 'implied_vol', 'volume', 'delta']
+                    available_cols = [col for col in display_cols if col in data_df.columns]
+                    if available_cols:
+                        data_df = data_df[available_cols].head(20)
+                
+                return "✅ Analysis complete", insights_text, chart1, chart2, chart3, data_df
+                
+            except Exception as e:
+                return f"❌ Error: {str(e)}", "", None, None, None, None
+        
+        # Connect main analyze button
+        analyze_btn.click(
+            fn=analyze_data_query,
+            inputs=[ds_query_input, ds_date_input],
+            outputs=[ds_status, insights_display, chart_output, chart_output2, chart_output3, data_table]
+        )
+        
+        # Quick analysis buttons
+        iv_analysis_btn.click(
+            fn=lambda: ("Show me the IV surface and smile analysis", ds_date_input.value),
+            outputs=[ds_query_input, ds_date_input]
+        ).then(
+            fn=analyze_data_query,
+            inputs=[ds_query_input, ds_date_input],
+            outputs=[ds_status, insights_display, chart_output, chart_output2, chart_output3, data_table]
+        )
+        
+        gamma_btn.click(
+            fn=lambda: ("Analyze gamma exposure and identify pin strikes", ds_date_input.value),
+            outputs=[ds_query_input, ds_date_input]
+        ).then(
+            fn=analyze_data_query,
+            inputs=[ds_query_input, ds_date_input],
+            outputs=[ds_status, insights_display, chart_output, chart_output2, chart_output3, data_table]
+        )
+        
+        flow_btn.click(
+            fn=lambda: ("Show high volume option flows and unusual activity", ds_date_input.value),
+            outputs=[ds_query_input, ds_date_input]
+        ).then(
+            fn=analyze_data_query,
+            inputs=[ds_query_input, ds_date_input],
+            outputs=[ds_status, insights_display, chart_output, chart_output2, chart_output3, data_table]
+        )
+        
+        market_btn.click(
+            fn=lambda: ("Give me a market summary with put/call ratios", ds_date_input.value),
+            outputs=[ds_query_input, ds_date_input]
+        ).then(
+            fn=analyze_data_query,
+            inputs=[ds_query_input, ds_date_input],
+            outputs=[ds_status, insights_display, chart_output, chart_output2, chart_output3, data_table]
+        )
+        
+        # Export handlers
+        def export_to_csv(data_df):
+            """Export data to CSV format"""
+            if isinstance(data_df, pd.DataFrame) and not data_df.empty:
+                csv_string = data_df.to_csv(index=False)
+                return gr.update(visible=True, value=csv_string)
+            else:
+                return gr.update(visible=True, value="No data to export")
+        
+        def export_to_code(query, date_context):
+            """Generate Python code for the analysis"""
+            code = f'''# Python code to reproduce this analysis
+import pandas as pd
+from optionslab.data_scientist_utils import DataScientistUtils
+from optionslab.data_scientist_engine import DataScientistEngine
+
+# Initialize engine
+engine = DataScientistEngine()
+
+# Run analysis
+query = "{query}"
+date_context = {"'" + date_context + "'" if date_context else "None"}
+result = engine.process_natural_language_query(query, date_context)
+
+# Display results
+print("Insights:")
+for insight in result.get('insights', []):
+    print(f"• {{insight}}")
+
+# Access data
+data = result.get('data')
+if isinstance(data, pd.DataFrame):
+    print(f"\\nData shape: {{data.shape}}")
+    print(data.head())
+
+# Display visualizations
+for name, fig in result.get('visualizations', []):
+    fig.show()
+'''
+            return gr.update(visible=True, value=code)
+        
+        export_csv_btn.click(
+            fn=export_to_csv,
+            inputs=[data_table],
+            outputs=[export_output]
+        )
+        
+        export_code_btn.click(
+            fn=export_to_code,
+            inputs=[ds_query_input, ds_date_input],
+            outputs=[export_output]
         )
         
         # Load initial data
