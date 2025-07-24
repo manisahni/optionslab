@@ -15,6 +15,14 @@
       "backtest_date": "2025-07-23T14:44:44.946234",
       "total_return": -0.3048,
       "total_trades": 17
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/07/fec6c34f-3314-4224-a324-4dcdd55ee49c_Shadow Stallion-2245_20250723_224514.csv",
+      "memorable_name": "Shadow Stallion-2245",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-07-23T22:45:14.907597",
+      "total_return": -0.3048,
+      "total_trades": 17
     }
   ],
   "last_updated": "2025-07-23T12:00:00.000000",

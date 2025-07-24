@@ -1082,15 +1082,24 @@ def plot_dte_coverage_time_series(trades: List[Dict]) -> go.Figure:
 
 
 def plot_exit_reason_distribution(trades: List[Dict]) -> go.Figure:
-    """Create pie chart of exit reasons"""
+    """Create pie chart of normalized exit reasons"""
     if not trades:
         return go.Figure().add_annotation(text="No trades to display", showarrow=False)
     
-    # Count exit reasons
+    # Count normalized exit reasons
     exit_reasons = {}
     for trade in trades:
         if 'exit_reason' in trade and trade['exit_reason']:
-            reason = trade['exit_reason']
+            # Normalize the exit reason
+            if 'stop loss' in trade['exit_reason'].lower():
+                reason = 'Stop Loss'
+            elif 'profit target' in trade['exit_reason'].lower():
+                reason = 'Profit Target'
+            elif 'end_of_period' in trade['exit_reason'].lower():
+                reason = 'End of Period'
+            else:
+                reason = 'Other'
+            
             exit_reasons[reason] = exit_reasons.get(reason, 0) + 1
     
     if not exit_reasons:

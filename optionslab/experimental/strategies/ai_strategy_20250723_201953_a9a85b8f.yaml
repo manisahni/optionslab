@@ -1,0 +1,58 @@
+name: ai_strategy_20250723_201953_a9a85b8f
+description: AI-generated strategy - Buy calls expecting price to go up
+strategy_type: long_call
+category: directional
+parameters:
+  initial_capital: 10000
+  position_size: 0.05
+  max_positions: 2
+  max_hold_days: 30
+  entry_frequency: 3
+legs:
+- type: call
+  direction: long
+  quantity: 1
+  delta_target: 0.3
+entry_rules:
+  dte: 45
+  delta_target: 0.3
+  volume_min: 100
+  open_interest_min: 500
+option_selection:
+  method: delta
+  delta_criteria:
+    target: 0.3
+    tolerance: 0.05
+  dte_criteria:
+    target: 45
+    minimum: 30
+    maximum: 60
+  liquidity_criteria:
+    min_volume: 100
+    max_spread_pct: 0.15
+exit_rules:
+- condition: profit_target
+  target_percent: 50
+- condition: stop_loss
+  stop_percent: -50
+- condition: time_stop
+  max_days: 21
+risk_management:
+  max_positions: 2
+  position_sizing: fixed
+  max_position_size: 0.05
+execution:
+  price_type: market
+strategy:
+  type: covered_call
+  parameters:
+    delta_target: 0.3
+    dte_target: 45
+    position_size: 0.05
+    profit_target: 0.25
+    stop_loss: -0.5
+ai_metadata:
+  generated_at: '2025-07-23T20:19:57.365261'
+  base_strategy: /Users/nish_macbook/thetadata-api/simple_test_strategy.yaml
+  modifications: null
+  description: reate a conservative covered call strategy that sells 30-delta calls on SPY with    45 DTE, taking 25% profit or -50% stop loss

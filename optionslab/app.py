@@ -47,6 +47,7 @@ from .visualization import (
     plot_technical_indicators_dashboard
 )
 from .ai_openai import get_openai_assistant
+from .ai_strategy_generator import get_strategy_generator
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -85,6 +86,18 @@ def get_available_strategies():
     simple_strategy = Path(__file__).parent.parent / "simple_test_strategy.yaml"
     if simple_strategy.exists():
         strategies.append(("🎯 Simple Long Call Strategy", str(simple_strategy)))
+    
+    # Check for AI-generated strategies
+    ai_strategies_dir = Path(__file__).parent / "ai_strategies"
+    if ai_strategies_dir.exists():
+        for yaml_file in sorted(ai_strategies_dir.glob("*.yaml"), key=lambda x: x.stat().st_mtime, reverse=True)[:10]:
+            try:
+                with open(yaml_file, 'r') as f:
+                    config = yaml.safe_load(f)
+                    name = config.get('name', yaml_file.stem)
+                    strategies.append((f"🤖 {name}", str(yaml_file)))
+            except:
+                continue
     
     return strategies if strategies else [("❌ No strategies found", None)]
 
@@ -652,8 +665,86 @@ def create_simple_interface():
                         gr.Markdown("### 📈 Improved Visualization")
                         improved_viz_plot = gr.Plot(label="Improved Plot")
             
+            # AI Strategy Generator Tab
+            with gr.TabItem("🤖 Strategy Generator", id=4):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("### 🧠 AI Strategy Generator")
+                        gr.Markdown("Describe your ideal trading strategy in plain English, and I'll help you create it!")
+                        
+                        # Quick start options
+                        gr.Markdown("### 🚀 Quick Start")
+                        
+                        # Template-based generation
+                        template_dropdown = gr.Dropdown(
+                            choices=[
+                                ("Conservative Put Selling", "conservative_put_selling"),
+                                ("Aggressive Call Buying", "aggressive_call_buying"),
+                                ("Iron Condor", "iron_condor"),
+                                ("Custom Strategy", "custom")
+                            ],
+                            label="Start with a Template",
+                            value="custom"
+                        )
+                        
+                        with gr.Row():
+                            start_template_btn = gr.Button("📋 Start from Template", variant="secondary")
+                            start_fresh_btn = gr.Button("💬 Start Fresh Conversation", variant="primary")
+                        
+                        gr.Markdown("### 📊 Recent AI Strategies")
+                        recent_strategies = gr.Dataframe(
+                            headers=["Name", "Type", "Created"],
+                            label="Recent AI-Generated Strategies",
+                            interactive=False
+                        )
+                        
+                        refresh_strategies_btn = gr.Button("🔄 Refresh List", size="sm")
+                        
+                        # Hidden state for conversation context
+                        strategy_context = gr.State({})
+                    
+                    with gr.Column(scale=2):
+                        gr.Markdown("### 💬 Strategy Development Chat")
+                        
+                        # Chat interface
+                        strategy_chatbot = gr.Chatbot(
+                            height=400,
+                            type="messages",
+                            show_label=False,
+                            elem_id="strategy_chatbot"
+                        )
+                        
+                        with gr.Row():
+                            strategy_msg_input = gr.Textbox(
+                                label="Message",
+                                placeholder="E.g., 'I want a conservative strategy for monthly income' or 'Help me create an aggressive growth strategy'",
+                                lines=2,
+                                scale=4
+                            )
+                            send_strategy_msg_btn = gr.Button("📤 Send", scale=1, variant="primary")
+                        
+                        # Strategy output section
+                        with gr.Accordion("📝 Generated Strategy", open=True):
+                            strategy_output = gr.Textbox(
+                                label="Strategy YAML",
+                                lines=15,
+                                max_lines=25,
+                                interactive=True,
+                                placeholder="Your strategy will appear here once generated..."
+                            )
+                            
+                            with gr.Row():
+                                strategy_name = gr.Textbox(
+                                    label="Strategy Name",
+                                    interactive=True,
+                                    scale=3
+                                )
+                                save_strategy_btn = gr.Button("💾 Save Strategy", variant="primary", scale=1)
+                            
+                            generation_status = gr.Markdown("")
+            
             # Log Manager Tab
-            with gr.TabItem("📁 Log Manager", id=4):
+            with gr.TabItem("📁 Log Manager", id=5):
                 with gr.Row():
                     with gr.Column():
                         gr.Markdown("### 🗑️ Manage Logs")
@@ -1309,6 +1400,165 @@ What would you like to explore?"""
             outputs=[action_output, backtest_selector]
         )
         
+        # ========================================================================
+        # AI STRATEGY GENERATOR HANDLERS
+        # ========================================================================
+        
+        
+        def get_recent_ai_strategies():
+            """Get dataframe of recent AI-generated strategies"""
+            try:
+                generator = get_strategy_generator()
+                strategies = generator.get_generated_strategies()
+                
+                # Format for display
+                display_data = []
+                for strategy in strategies[:10]:  # Show latest 10
+                    created_time = datetime.fromtimestamp(strategy['created']).strftime("%Y-%m-%d %H:%M")
+                    display_data.append([
+                        strategy['name'],
+                        strategy['type'],
+                        created_time
+                    ])
+                
+                return pd.DataFrame(display_data, columns=["Name", "Type", "Created"])
+            except:
+                return pd.DataFrame(columns=["Name", "Type", "Created"])
+        
+        # New conversational strategy generator functions
+        def start_strategy_conversation(template_name, chat_history, context):
+            """Start a new strategy conversation"""
+            chat_history = []
+            
+            if template_name == "custom":
+                chat_history.append({
+                    "role": "assistant", 
+                    "content": """👋 Hi! I'm here to help you create a custom options trading strategy. 
+
+Let's start with the basics. Could you tell me:
+1. What's your main goal? (e.g., monthly income, capital growth, hedging)
+2. What's your risk tolerance? (conservative, moderate, or aggressive)
+3. Do you have any specific strategies in mind? (e.g., selling puts, buying calls, spreads)
+
+Feel free to describe your ideal strategy in your own words!"""
+                })
+                context = {"mode": "custom", "stage": "initial"}
+            else:
+                # Start with template
+                chat_history.append({
+                    "role": "assistant",
+                    "content": f"""👋 I see you're interested in the {template_name.replace('_', ' ').title()} strategy. This is a great choice!
+
+Let me help you customize it for your needs. A few questions:
+1. What's your typical account size? (This helps with position sizing)
+2. How many positions do you want to manage at once?
+3. Any specific stocks or ETFs you prefer to trade?
+
+I'll create a personalized version of this strategy based on your preferences."""
+                })
+                context = {"mode": "template", "template": template_name, "stage": "customization"}
+            
+            return chat_history, context, "", "", ""
+        
+        def chat_strategy_development(message, chat_history, context, current_yaml):
+            """Handle strategy development conversation"""
+            if not chat_history:
+                chat_history = []
+            
+            # Add user message
+            chat_history.append({"role": "user", "content": message})
+            
+            try:
+                generator = get_strategy_generator()
+                
+                # Analyze conversation and generate/update strategy
+                response, updated_context, yaml_content, strategy_name = generator.process_conversation(
+                    message, chat_history, context, current_yaml
+                )
+                
+                # Add AI response
+                chat_history.append({"role": "assistant", "content": response})
+                
+                # Update status if strategy was generated
+                status = ""
+                if yaml_content and yaml_content != current_yaml:
+                    status = "✅ Strategy updated based on your requirements"
+                
+                return chat_history, "", updated_context, yaml_content, strategy_name, status
+                
+            except Exception as e:
+                chat_history.append({
+                    "role": "assistant", 
+                    "content": f"❌ I encountered an error: {str(e)}. Let's try again. Could you rephrase your request?"
+                })
+                return chat_history, "", context, current_yaml, "", ""
+        
+        def save_generated_strategy(yaml_content, strategy_name):
+            """Save the generated strategy to file"""
+            try:
+                if not yaml_content:
+                    return "❌ No strategy to save. Please generate a strategy first."
+                
+                generator = get_strategy_generator()
+                
+                # Parse YAML to ensure it's valid
+                import yaml
+                strategy_config = yaml.safe_load(yaml_content)
+                
+                # Update name if provided
+                if strategy_name:
+                    strategy_config['name'] = strategy_name
+                
+                # Generate filename
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                unique_id = str(uuid.uuid4())[:8]
+                filename = f"ai_strategy_{timestamp}_{unique_id}.yaml"
+                filepath = generator.strategies_dir / filename
+                
+                # Save file
+                with open(filepath, 'w') as f:
+                    yaml.dump(strategy_config, f, default_flow_style=False, sort_keys=False)
+                
+                return f"✅ Strategy saved successfully to: {filename}", get_recent_ai_strategies()
+                
+            except Exception as e:
+                return f"❌ Error saving strategy: {str(e)}", get_recent_ai_strategies()
+        
+        # Connect AI Strategy Generator handlers
+        start_template_btn.click(
+            fn=start_strategy_conversation,
+            inputs=[template_dropdown, strategy_chatbot, strategy_context],
+            outputs=[strategy_chatbot, strategy_context, strategy_output, strategy_name, generation_status]
+        )
+        
+        start_fresh_btn.click(
+            fn=lambda: start_strategy_conversation("custom", [], {}),
+            outputs=[strategy_chatbot, strategy_context, strategy_output, strategy_name, generation_status]
+        )
+        
+        send_strategy_msg_btn.click(
+            fn=chat_strategy_development,
+            inputs=[strategy_msg_input, strategy_chatbot, strategy_context, strategy_output],
+            outputs=[strategy_chatbot, strategy_msg_input, strategy_context, strategy_output, strategy_name, generation_status]
+        )
+        
+        strategy_msg_input.submit(
+            fn=chat_strategy_development,
+            inputs=[strategy_msg_input, strategy_chatbot, strategy_context, strategy_output],
+            outputs=[strategy_chatbot, strategy_msg_input, strategy_context, strategy_output, strategy_name, generation_status]
+        )
+        
+        save_strategy_btn.click(
+            fn=save_generated_strategy,
+            inputs=[strategy_output, strategy_name],
+            outputs=[generation_status, recent_strategies]
+        )
+        
+        refresh_strategies_btn.click(
+            fn=get_recent_ai_strategies,
+            outputs=[recent_strategies]
+        )
+        
         # Load initial data
         app.load(
             fn=refresh_backtest_list,
@@ -1327,12 +1577,43 @@ What would you like to explore?"""
 
 if __name__ == "__main__":
     import os
+    import sys
+    
+    # Configure logging for better visibility
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
+    print("\n" + "="*60)
+    print("🚀 Starting OptionsLab Trading Platform")
+    print("="*60)
+    
     port = int(os.getenv("GRADIO_SERVER_PORT", "7862"))
+    print(f"\n📊 Creating interface...")
+    
     app = create_simple_interface()
+    
+    print(f"🌐 Launching server on port {port}...")
+    print(f"\n✅ Server will be available at:")
+    print(f"   • Local:    http://localhost:{port}")
+    print(f"   • Network:  http://0.0.0.0:{port}")
+    print(f"\n⌨️  Press Ctrl+C to stop the server\n")
+    print("="*60 + "\n")
+    
+    # Launch the app
     app.launch(
         server_name="0.0.0.0",
         server_port=port,
         share=False,
         show_error=True,
-        inbrowser=False
+        inbrowser=False,
+        quiet=False
     )
+    
+    # This line will only execute if the server stops
+    print("\n🛑 Server stopped.")
