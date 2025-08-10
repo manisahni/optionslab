@@ -1,0 +1,7 @@
+INFO:database:Database initialized at /Users/nish_macbook/0dte/tradier/database/market_data.db
+INFO:core.cache_manager:Initializing market data cache...
+INFO:core.cache_manager:Cache already contains 4162 records
+INFO:core.historical_loader:Loading today's data from 2025-08-08 04:00 to 2025-08-08 14:29
+INFO:core.cache_manager:Cache initialization complete: {'spy_records': 4712, 'options_records': 0, 'cache_exists': True, 'loaded_from': '2025-08-04 00:01:00', 'loaded_to': '2025-08-08 13:06:00'}
+INFO:core.realtime_updater:Real-time updater started (interval: 10s)
+INFO:core.cache_manager:Real-time updates started

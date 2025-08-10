@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2025-08-06 14:47:01.212861",
+    "spy_price": 632.845,
+    "call_strike": 636,
+    "put_strike": 630,
+    "position_size": 1,
+    "status": "SIMULATED"
+  }
+]

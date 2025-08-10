@@ -1,0 +1,16 @@
+{
+  "strategy": "ORB",
+  "parameters": {
+    "timeframe": 60,
+    "instrument": "Options",
+    "starting_capital": 25000,
+    "risk_per_trade": 2
+  },
+  "backtest_id": "20250728_125534_orb",
+  "timestamp": "2025-07-28T12:55:34.247321",
+  "data_range": {
+    "start": "2023-07-26",
+    "end": "2025-07-24",
+    "trading_days": 495
+  }
+}

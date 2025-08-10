@@ -1,0 +1,71 @@
+# Data Dictionary - Trading Strategy Analysis
+
+## File Descriptions
+
+### trades_enhanced_full.csv
+Complete trade data with all 43 technical features calculated.
+
+### trades_enhanced_basic.csv  
+Basic trade data with core features only.
+
+### daily_timeseries.csv
+Daily aggregated performance metrics and statistics.
+
+## Column Definitions
+
+### Core Trade Data
+- **date**: Trade date (YYYY-MM-DD format)
+- **pnl**: Profit/Loss in dollars
+- **entry_price**: Entry price for the trade
+- **exit_price**: Exit price for the trade
+- **outcome**: Trade result ('win' or 'loss')
+
+### Strategy Specific
+- **orb_high**: Opening Range Breakout high level
+- **orb_low**: Opening Range Breakout low level  
+- **orb_range**: ORB range size in dollars
+- **breakout**: Boolean - whether breakout occurred
+- **breakout_type**: Direction ('long' or 'short')
+- **breakout_time**: Time of breakout occurrence
+
+### Technical Indicators
+- **rsi_entry**: RSI (14-period) at trade entry
+- **bb_upper/bb_lower**: Bollinger Band levels
+- **bb_position**: Position relative to Bollinger Bands
+- **vwap**: Volume Weighted Average Price
+- **vwap_distance**: Distance from VWAP (%)
+- **ema_20/ema_50**: Exponential Moving Averages
+- **sma_20**: Simple Moving Average
+- **macd/macd_signal**: MACD indicator values
+
+### Market Conditions
+- **entry_hour**: Hour of trade entry (24hr format)
+- **entry_volatility**: Implied volatility at entry
+- **volume**: Trading volume
+- **duration_minutes**: Trade holding period
+
+### Performance Metrics
+- **daily_pnl**: P&L for the trading day
+- **cumulative_pnl**: Running total P&L
+- **drawdown**: Current drawdown amount
+- **win_rate**: Rolling win rate percentage
+
+### Risk Metrics
+- **position_size**: Trade size/exposure
+- **risk_amount**: Amount at risk per trade
+- **return_pct**: Return as percentage
+- **sharpe_daily**: Daily Sharpe ratio
+
+## Data Quality Notes
+- All prices are in USD
+- Times are in Eastern Time (ET)
+- Missing values denoted as NaN
+- Boolean values: True/False or 1/0
+- Percentages stored as decimals (0.50 = 50%)
+
+## Analysis Tips
+1. Focus on 'pnl' as primary outcome variable
+2. Use 'entry_hour' for time-based filtering
+3. 'orb_range' indicates breakout opportunity size
+4. 'entry_volatility' represents market conditions
+5. Technical indicators help identify setup quality

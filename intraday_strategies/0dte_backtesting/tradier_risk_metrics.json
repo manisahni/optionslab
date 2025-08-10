@@ -1,0 +1,56 @@
+{
+  "thresholds": {
+    "max_loss_pct": 200,
+    "profit_target_pct": 50,
+    "strike_buffer": 0.5,
+    "vega_warning": 1.5,
+    "time_stop_minutes": 1
+  },
+  "history": [
+    {
+      "timestamp": "2025-08-07T12:44:20.914540",
+      "spy_price": 630.375,
+      "positions": {
+        "call": {
+          "symbol": "SPY250807C00636000",
+          "strike": 636.0,
+          "quantity": -1.0,
+          "price": 0.025,
+          "iv": 0.09944433792959606,
+          "distance": -5.625
+        },
+        "put": {
+          "symbol": "SPY250807P00629000",
+          "strike": 629.0,
+          "quantity": -1.0,
+          "price": 0.485,
+          "iv": 0.0937800284783062,
+          "distance": 1.375
+        }
+      },
+      "greeks": {
+        "delta": 0.2679445458608895,
+        "gamma": -0.15036346227751549,
+        "theta": -0.20345958428621125,
+        "vega": -0.11246307771977027,
+        "rho": 0.0033729153166028813,
+        "call_delta": 0.023995208062276552,
+        "put_delta": -0.29193975392316607,
+        "call_vega": 0.015882518640429003,
+        "put_vega": 0.09658055907934127
+      },
+      "risk_levels": {
+        "vega": "LOW",
+        "delta": "HIGH",
+        "strike": "WARNING",
+        "gamma": "HIGH",
+        "overall": "HIGH"
+      },
+      "warnings": [
+        "\u26a0\ufe0f Delta imbalance: +0.268",
+        "\u26a0\ufe0f High gamma risk: 0.150"
+      ]
+    }
+  ],
+  "last_update": "2025-08-07T12:44:20.922383"
+}

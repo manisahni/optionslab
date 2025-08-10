@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>0DTE Strangle Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .status {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected { background: #10b981; }
+        .status-dot.disconnected { background: #ef4444; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .card h2 {
+            font-size: 14px;
+            color: #9ca3af;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .spy-price {
+            grid-column: span 2;
+            background: linear-gradient(135deg, #0093E9 0%, #80D0C7 100%);
+        }
+        
+        .spy-price .price {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .spy-price .change {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .strike-visual {
+            grid-column: span 2;
+            position: relative;
+            height: 80px;
+        }
+        
+        .strike-bar {
+            position: relative;
+            height: 40px;
+            background: linear-gradient(90deg, 
+                #ef4444 0%, 
+                #f59e0b 20%, 
+                #10b981 40%, 
+                #10b981 60%, 
+                #f59e0b 80%, 
+                #ef4444 100%);
+            border-radius: 20px;
+            margin: 20px 0;
+        }
+        
+        .strike-marker {
+            position: absolute;
+            top: -10px;
+            width: 20px;
+            height: 60px;
+            background: #fff;
+            border-radius: 10px;
+            transform: translateX(-50%);
+            box-shadow: 0 0 20px rgba(255,255,255,0.5);
+            transition: left 0.3s ease;
+        }
+        
+        .strike-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        
+        .greeks-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .greek-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .greek-label {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 5px;
+        }
+        
+        .greek-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .greek-value.positive { color: #10b981; }
+        .greek-value.negative { color: #ef4444; }
+        .greek-value.neutral { color: #f59e0b; }
+        
+        .risk-levels {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .risk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        
+        .risk-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .risk-badge.LOW { background: #10b981; }
+        .risk-badge.MEDIUM { background: #f59e0b; }
+        .risk-badge.HIGH { background: #ef4444; }
+        .risk-badge.CRITICAL { background: #dc2626; animation: blink 1s infinite; }
+        .risk-badge.SAFE { background: #10b981; }
+        .risk-badge.NEUTRAL { background: #6b7280; }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .warnings {
+            grid-column: span 2;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .warning-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .warning-item {
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 3px solid #ef4444;
+            border-radius: 4px;
+        }
+        
+        .chart-container {
+            grid-column: span 2;
+            height: 300px;
+            position: relative;
+        }
+        
+        .pnl {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .pnl-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .pnl-value.profit { color: #10b981; }
+        .pnl-value.loss { color: #ef4444; }
+        
+        .exit-button {
+            grid-column: span 2;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: none;
+            color: white;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .exit-button:hover {
+            transform: scale(1.02);
+        }
+        
+        .exit-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .time-remaining {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 0DTE Strangle Monitor</h1>
+        <div class="status">
+            <div class="status-indicator">
+                <span class="status-dot" id="connectionStatus"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+            <div class="status-indicator">
+                <span id="marketStatus">Market: --</span>
+            </div>
+            <div class="status-indicator">
+                <span id="currentTime">--:--:--</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="dashboard">
+        <!-- SPY Price Card -->
+        <div class="card spy-price">
+            <h2>SPY Price</h2>
+            <div class="price" id="spyPrice">---.--</div>
+            <div class="change" id="spyChange">Loading...</div>
+        </div>
+        
+        <!-- Strike Visualization -->
+        <div class="card strike-visual">
+            <h2>Strike Map</h2>
+            <div class="strike-bar">
+                <div class="strike-marker" id="strikeMarker"></div>
+            </div>
+            <div class="strike-labels">
+                <span id="putStrike">PUT: --</span>
+                <span>SPY</span>
+                <span id="callStrike">CALL: --</span>
+            </div>
+        </div>
+        
+        <!-- Greeks -->
+        <div class="card">
+            <h2>Greeks</h2>
+            <div class="greeks-grid">
+                <div class="greek-item">
+                    <div class="greek-label">Delta</div>
+                    <div class="greek-value" id="delta">--.---</div>
+                </div>
+                <div class="greek-item">
+                    <div class="greek-label">Gamma</div>
+                    <div class="greek-value" id="gamma">--.---</div>
+                </div>
+                <div class="greek-item">
+                    <div class="greek-label">Theta</div>
+                    <div class="greek-value" id="theta">--.--</div>
+                </div>
+                <div class="greek-item">
+                    <div class="greek-label">Vega</div>
+                    <div class="greek-value" id="vega">--.---</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Risk Levels -->
+        <div class="card">
+            <h2>Risk Assessment</h2>
+            <div class="risk-levels">
+                <div class="risk-item">
+                    <span>Vega Risk</span>
+                    <span class="risk-badge" id="vegaRisk">--</span>
+                </div>
+                <div class="risk-item">
+                    <span>Delta Risk</span>
+                    <span class="risk-badge" id="deltaRisk">--</span>
+                </div>
+                <div class="risk-item">
+                    <span>Strike Risk</span>
+                    <span class="risk-badge" id="strikeRisk">--</span>
+                </div>
+                <div class="risk-item">
+                    <span>Overall Risk</span>
+                    <span class="risk-badge" id="overallRisk">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- P&L Card -->
+        <div class="card pnl">
+            <h2>Position P&L</h2>
+            <div class="pnl-value" id="pnl">$0.00</div>
+            <div id="pnlDetails">Loading...</div>
+        </div>
+        
+        <!-- Time Remaining -->
+        <div class="card">
+            <h2>Time to Close</h2>
+            <div class="time-remaining" id="timeRemaining">--:--:--</div>
+            <div style="text-align: center; margin-top: 10px; color: #9ca3af;">
+                Close by 3:59 PM ET
+            </div>
+        </div>
+        
+        <!-- Warnings -->
+        <div class="card warnings" id="warningsCard" style="display: none;">
+            <h2>⚠️ Warnings</h2>
+            <div class="warning-list" id="warningsList"></div>
+        </div>
+        
+        <!-- Price Chart -->
+        <div class="card chart-container">
+            <h2>SPY Price History</h2>
+            <canvas id="priceChart"></canvas>
+        </div>
+        
+        <!-- Greeks Chart -->
+        <div class="card chart-container">
+            <h2>Greeks Evolution</h2>
+            <canvas id="greeksChart"></canvas>
+        </div>
+        
+        <!-- Exit Button -->
+        <button class="exit-button" id="exitButton" onclick="closePosition()">
+            🚨 CLOSE POSITION
+        </button>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
