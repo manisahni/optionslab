@@ -1,0 +1,21 @@
+# Jupytext configuration for daily-optionslab
+# =============================================
+# This ensures all notebooks are stored as both .py and .ipynb files
+# The .py format is git-friendly and the primary source of truth
+# The .ipynb format is for interactive development
+
+# Default format when saving notebooks
+preferred_jupytext_formats_save = "py:percent"
+
+# Remove unnecessary metadata for cleaner .py files
+notebook_metadata_filter = "-all"
+cell_metadata_filter = "-all"
+
+# Apply to all notebooks in the notebooks/ directory
+[formats]
+"notebooks/" = "ipynb,py:percent"
+"notebooks/research/" = "ipynb,py:percent"
+"notebooks/strategies/" = "ipynb,py:percent"
+"notebooks/templates/" = "ipynb,py:percent"
+"notebooks/examples/" = "ipynb,py:percent"
+"notebooks/utils/" = "ipynb,py:percent"

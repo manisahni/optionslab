@@ -410,7 +410,8 @@ Initial Capital: ${metadata.get('initial_capital', 10000):,}""")
         context_parts.append("\n=== AVAILABLE DATA SOURCES ===")
         
         # Historical data
-        data_dir = Path(__file__).parent / "data"
+        # Use main data folder instead of optionslab/data
+        data_dir = Path(__file__).parent.parent / "data" / "spy_options"
         if data_dir.exists():
             parquet_files = list(data_dir.glob("*.parquet"))
             if parquet_files:
@@ -522,7 +523,8 @@ Initial Capital: ${metadata.get('initial_capital', 10000):,}""")
         }
         
         # Check for historical data files
-        data_dir = Path(__file__).parent / "data"
+        # Use main data folder instead of optionslab/data
+        data_dir = Path(__file__).parent.parent / "data" / "spy_options"
         if data_dir.exists():
             for parquet_file in data_dir.glob("*.parquet"):
                 available_files["historical_data"].append(parquet_file.name)
@@ -558,7 +560,8 @@ Initial Capital: ${metadata.get('initial_capital', 10000):,}""")
             return "PyArrow not installed - cannot read parquet files"
         
         try:
-            data_dir = Path(__file__).parent / "data"
+            # Use main data folder instead of optionslab/data
+            data_dir = Path(__file__).parent.parent / "data" / "spy_options"
             if not data_dir.exists():
                 return None
                 

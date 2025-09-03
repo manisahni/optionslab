@@ -31,6 +31,22 @@
       "backtest_date": "2025-07-24T11:46:45.796459",
       "total_return": -0.3048,
       "total_trades": 17
+    },
+    {
+      "path": "/Users/nish_macbook/thetadata-api/optionslab/trade_logs/2025/08/41becaee-8a4f-42d0-a6c8-14dc1f94011a_Bold Raven-2156_20250801_215615.csv",
+      "memorable_name": "Bold Raven-2156",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-08-01T21:56:15.671034",
+      "total_return": -0.3048,
+      "total_trades": 17
+    },
+    {
+      "path": "/Users/nish_macbook/trading/daily-optionslab/optionslab/trade_logs/2025/09/0700e0e1-1e4b-4f3e-8664-ca7419792f61_Steady Cobra-2316_20250901_231618.csv",
+      "memorable_name": "Steady Cobra-2316",
+      "strategy": "simple-test-strategy",
+      "backtest_date": "2025-09-01T23:16:18.648695",
+      "total_return": -0.3048,
+      "total_trades": 17
     }
   ],
   "last_updated": "2025-07-23T12:00:00.000000",

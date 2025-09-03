@@ -1,0 +1,68 @@
+# ZEBRA Call Strategy - Simple Test Configuration
+# Compatible with existing backtest engine
+# This is a simplified version for testing
+
+name: "ZEBRA Call Test"
+description: "Testing ZEBRA call spread implementation"
+strategy_type: "long_call"  # Using existing type for compatibility
+category: "directional"
+
+# Strategy Parameters
+parameters:
+  initial_capital: 100000   # Starting capital
+  position_size: 0.10       # 10% of capital per trade
+  max_positions: 3          # Max concurrent positions
+  max_hold_days: 45         # Max days to hold position
+  entry_frequency: 20       # Days between entries
+
+# For compatibility with existing engine
+legs:
+  - type: call
+    direction: long
+    quantity: 1             # Simplified to single leg for testing
+    delta_target: 0.55      # ITM call
+
+# Option Selection Configuration (Required by existing engine)
+option_selection:
+  method: "delta"           # Select based on delta
+  
+  delta_criteria:
+    target: 0.55            # Target 55 delta (ITM)
+    tolerance: 0.05         # Accept 50-60 delta
+    
+  dte_criteria:
+    target: 45              # Target 45 DTE
+    minimum: 35             # Min 35 days
+    maximum: 60             # Max 60 days
+    
+  liquidity_criteria:
+    min_volume: 100         # Minimum daily volume
+    max_spread_pct: 0.15    # Maximum 15% bid-ask spread
+
+# Entry Rules  
+entry_rules:
+  dte: 45                   # Days to expiration
+  delta_target: 0.55        # Target delta
+  volume_min: 100           # Minimum volume
+  open_interest_min: 100    # Minimum open interest
+
+# Exit Rules
+exit_rules:
+  - condition: "profit_target"
+    target_percent: 50      # Exit at 50% profit
+    
+  - condition: "stop_loss"
+    stop_percent: -30       # Exit at 30% loss
+    
+  - condition: "time_stop"
+    max_days: 21            # Exit after 21 days
+
+# Risk Management
+risk_management:
+  max_positions: 3          # Max 3 concurrent positions
+  position_sizing: "fixed"  # Fixed position size
+  max_position_size: 0.10   # 10% of capital per trade
+
+# Execution
+execution:
+  price_type: "market"      # Use market prices

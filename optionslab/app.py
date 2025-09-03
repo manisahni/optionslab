@@ -62,9 +62,21 @@ def get_trade_logs_dir() -> Path:
 def get_available_data_files():
     """Get available parquet files for backtesting"""
     # Use local data directory
-    data_dir = Path(__file__).parent / "data"
+    # Use main data folder instead of optionslab/data
+    data_dir = Path(__file__).parent.parent / "data" / "spy_options"
     
     files = []
+    
+    # Check for ThetaData 0DTE files first
+    thetadata_dir = Path("/Users/nish_macbook/theta-options-suite/intraday_strategies/0dte_backtesting/data_thetadata/spy_0dte")
+    if thetadata_dir.exists():
+        # Check if we have the combined VegaAware file
+        vegaware_file = data_dir / "SPY_0DTE_VEGAWARE_202507.parquet"
+        if vegaware_file.exists():
+            files.append(("⚡ SPY 0DTE VegaAware Data (July 2025)", str(vegaware_file)))
+        else:
+            # Offer to load from ThetaData directly
+            files.append(("🎯 ThetaData: 249 Days 0DTE Options (Live Load)", "thetadata://0dte"))
     
     if data_dir.exists():
         # Check for master file first
@@ -83,6 +95,11 @@ def get_available_data_files():
 def get_available_strategies():
     """Get available strategy configurations"""
     strategies = []
+    
+    # Check for VegaAware strategy
+    vegaware_strategy = Path(__file__).parent.parent / "vegaware_0dte_strategy.yaml"
+    if vegaware_strategy.exists():
+        strategies.append(("🔥 VegaAware 0DTE Strangle (93.7% Win Rate)", str(vegaware_strategy)))
     
     # Check parent directory for the main strategy
     simple_strategy = Path(__file__).parent.parent / "simple_test_strategy.yaml"

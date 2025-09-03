@@ -1,6 +1,6 @@
 """
 Market filters for options backtesting
-Handles IV regime, trend, RSI, and Bollinger Band filters
+Handles IV regime, VIX timing, trend, RSI, and Bollinger Band filters
 """
 
 import numpy as np
@@ -28,6 +28,12 @@ class MarketFilters:
         # Check each filter if configured
         if 'iv_regime' in self.market_filters:
             passed, msg = self.check_iv_filter(current_date, current_price)
+            results.append(passed)
+            if msg:
+                messages.append(msg)
+                
+        if 'vix_timing' in self.market_filters:
+            passed, msg = self.check_vix_timing_filter(current_price, date_idx)
             results.append(passed)
             if msg:
                 messages.append(msg)
@@ -76,6 +82,91 @@ class MarketFilters:
             return False, f"IV regime filter blocked - Avg IV: {avg_iv:.3f} (allowed: {min_iv:.3f}-{max_iv:.3f})"
         
         return True, f"IV regime filter passed - Avg IV: {avg_iv:.3f}"
+    
+    def check_vix_timing_filter(self, current_price: float, date_idx: int) -> Tuple[bool, Optional[str]]:
+        """Check VIX-based entry timing filter"""
+        vix_filter = self.market_filters['vix_timing']
+        vix_lookback = vix_filter.get('lookback_days', 10)
+        vix_percentile_threshold = vix_filter.get('percentile_threshold', 75)
+        vix_absolute_threshold = vix_filter.get('absolute_threshold', None)
+        
+        # Need enough history for VIX calculation
+        if date_idx < vix_lookback - 1:
+            return True, "Not enough data for VIX timing calculation"
+        
+        # Calculate VIX proxy using ATM option implied volatility
+        current_date = self.unique_dates[date_idx]
+        date_data = self.data[self.data['date'] == current_date]
+        
+        # Get ATM options for VIX proxy
+        strike_col = 'strike_dollars' if 'strike_dollars' in date_data.columns else 'strike'
+        atm_options = date_data[
+            (abs(date_data[strike_col] - current_price) <= current_price * 0.02) &
+            (date_data['dte'] >= 25) &  # Use ~30 DTE options for VIX proxy
+            (date_data['dte'] <= 35) &
+            (date_data['implied_vol'] > 0)
+        ]
+        
+        if atm_options.empty:
+            return True, None
+        
+        current_vix_proxy = atm_options['implied_vol'].mean() * 100  # Convert to VIX-like percentage
+        
+        # Calculate VIX proxy history for lookback period
+        vix_history = []
+        for i in range(vix_lookback):
+            hist_idx = date_idx - i
+            if hist_idx >= 0:
+                hist_date = self.unique_dates[hist_idx]
+                hist_data = self.data[self.data['date'] == hist_date]
+                strike_col = 'strike_dollars' if 'strike_dollars' in hist_data.columns else 'strike'
+                hist_atm = hist_data[
+                    (abs(hist_data[strike_col] - hist_data['underlying_price'].iloc[0]) <= 
+                     hist_data['underlying_price'].iloc[0] * 0.02) &
+                    (hist_data['dte'] >= 25) &
+                    (hist_data['dte'] <= 35) &
+                    (hist_data['implied_vol'] > 0)
+                ]
+                if not hist_atm.empty:
+                    vix_history.append(hist_atm['implied_vol'].mean() * 100)
+        
+        if len(vix_history) < vix_lookback:
+            return True, None
+            
+        # Check absolute threshold if specified
+        if vix_absolute_threshold is not None:
+            strategy_type = self.config.get('strategy_type', 'long_premium')
+            if strategy_type in ['short_strangle', 'iron_condor', 'short_premium']:
+                # For premium selling strategies, enter when VIX is HIGH
+                if current_vix_proxy < vix_absolute_threshold:
+                    return False, f"VIX timing blocked - VIX proxy {current_vix_proxy:.1f} < {vix_absolute_threshold} (need high vol for premium selling)"
+                return True, f"VIX timing passed - VIX proxy {current_vix_proxy:.1f} >= {vix_absolute_threshold} (good for premium selling)"
+            else:
+                # For premium buying strategies, enter when VIX is LOW
+                if current_vix_proxy > vix_absolute_threshold:
+                    return False, f"VIX timing blocked - VIX proxy {current_vix_proxy:.1f} > {vix_absolute_threshold} (need low vol for premium buying)"
+                return True, f"VIX timing passed - VIX proxy {current_vix_proxy:.1f} <= {vix_absolute_threshold} (good for premium buying)"
+        
+        # Check percentile threshold
+        vix_percentile = np.percentile(vix_history, vix_percentile_threshold)
+        strategy_type = self.config.get('strategy_type', 'long_premium')
+        
+        if strategy_type in ['short_strangle', 'iron_condor', 'short_premium']:
+            # For premium selling, enter when VIX is in upper percentile (high volatility)
+            if current_vix_proxy < vix_percentile:
+                return False, (f"VIX timing blocked - VIX proxy {current_vix_proxy:.1f} below "
+                             f"{vix_percentile_threshold}th percentile ({vix_percentile:.1f}) - need high vol for premium selling")
+            return True, (f"VIX timing passed - VIX proxy {current_vix_proxy:.1f} above "
+                         f"{vix_percentile_threshold}th percentile ({vix_percentile:.1f}) - good for premium selling")
+        else:
+            # For premium buying, enter when VIX is in lower percentile (low volatility)
+            low_percentile = 100 - vix_percentile_threshold
+            vix_low_threshold = np.percentile(vix_history, low_percentile)
+            if current_vix_proxy > vix_low_threshold:
+                return False, (f"VIX timing blocked - VIX proxy {current_vix_proxy:.1f} above "
+                             f"{low_percentile}th percentile ({vix_low_threshold:.1f}) - need low vol for premium buying")
+            return True, (f"VIX timing passed - VIX proxy {current_vix_proxy:.1f} below "
+                         f"{low_percentile}th percentile ({vix_low_threshold:.1f}) - good for premium buying")
     
     def check_ma_filter(self, current_price: float, date_idx: int) -> Tuple[bool, Optional[str]]:
         """Check moving average trend filter"""

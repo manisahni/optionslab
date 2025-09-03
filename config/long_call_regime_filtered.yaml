@@ -1,0 +1,177 @@
+# Long Call Strategy with Regime Filters
+# Only trades when volatility regime is favorable
+
+name: "Long Call - Regime Filtered"
+strategy_type: "long_call"
+description: "Long call strategy that adapts to market volatility regimes"
+
+# Required parameters section
+parameters:
+  initial_capital: 10000
+  commission_per_contract: 0.65
+  max_hold_days: 45
+  position_size: 0.05  # 5% of capital per trade
+  position_size_pct: 0.05  # Alternative naming
+
+# Option selection criteria
+option_selection:
+  # Delta criteria for calls
+  delta_criteria:
+    target: 0.30
+    tolerance: 0.10
+    minimum: 0.20
+    maximum: 0.40
+    
+  # DTE criteria
+  dte_criteria:
+    target: 35
+    minimum: 30
+    maximum: 45
+    
+  # Liquidity criteria
+  liquidity_criteria:
+    min_volume: 100       # Higher threshold for better fills
+    max_spread_pct: 0.15   # Tighter spreads required
+
+# Exit rules (compatible with exit_conditions.py)
+exit_rules:
+  - condition: "profit_target"
+    threshold: 50.0  # 50% profit target
+    
+  - condition: "stop_loss" 
+    threshold: -30.0  # 30% stop loss
+    
+  - condition: "time_stop"
+    dte_threshold: 7  # Exit at 7 DTE
+
+# Market filters - REGIME AWARE
+market_filters:
+  # Volatility regime filter - Trade long calls in higher vol
+  volatility_regime:
+    enabled: true
+    method: "ewma"  # Use exponentially weighted moving average
+    lookback_days: 20
+    thresholds:
+      min_vol: 0.12  # Don't trade if vol < 12% (too low for long options)
+      max_vol: 0.40  # Don't trade if vol > 40% (too extreme)
+      optimal_range: [0.18, 0.30]  # Best range for long calls
+    
+  # Trend filter - Long calls work better in uptrends
+  trend_filter:
+    enabled: true
+    require_uptrend: true
+    ema_short: 20
+    ema_long: 50
+    # Only trade if EMA20 > EMA50
+    
+  # Drawdown filter - Avoid deep drawdowns
+  drawdown_filter:
+    enabled: true
+    max_drawdown: -15.0  # Don't trade if SPY in >15% drawdown
+    
+  # RSI filter - Avoid extreme conditions
+  rsi_filter:
+    enabled: true
+    min_rsi: 30  # Not oversold
+    max_rsi: 70  # Not overbought
+    period: 14
+    
+  # VIX proxy filter (using ATM IV)
+  iv_percentile_filter:
+    enabled: true
+    lookback_days: 252
+    min_percentile: 25  # Need some volatility for long options
+    max_percentile: 90  # Avoid extreme fear
+
+# Position sizing adjustments based on regime
+position_sizing_adjustments:
+  # Scale position size based on volatility
+  vol_based_sizing:
+    enabled: true
+    base_size: 0.05  # 5% base
+    adjustments:
+      low_vol: 0.7   # Reduce to 3.5% in low vol
+      normal_vol: 1.0  # Keep at 5% 
+      high_vol: 0.8   # Reduce to 4% in high vol
+      
+  # Reduce size during drawdowns
+  drawdown_adjustment:
+    enabled: true
+    reduction_per_5pct_dd: 0.20  # Reduce 20% per 5% drawdown
+
+# Regime-specific parameter overrides
+regime_overrides:
+  low_vol_bull:
+    # In low vol bull markets, be more selective
+    delta_target: 0.35  # Higher delta (more ITM)
+    profit_target: 75.0  # Higher profit target
+    
+  high_vol_bear:
+    # In high vol bear markets, be defensive
+    position_size: 0.03  # Smaller positions
+    stop_loss: -20.0  # Tighter stops
+    dte_minimum: 45  # Longer dated for more time
+    
+  normal_vol:
+    # Use default parameters
+    
+# Execution settings
+execution:
+  fill_method: "mid_plus_slippage"
+  slippage_pct: 0.5  # Account for slippage
+  
+  # Don't trade first/last 15 minutes
+  entry_time_start: "09:45"
+  entry_time_end: "15:45"
+  
+  # Skip trading on Fed days
+  skip_fed_days: true
+  
+# Backtesting settings
+backtesting:
+  # Data requirements
+  require_greeks: true
+  require_iv: true  # Need IV for percentile filter
+  
+  # Validation
+  validate_spreads: true
+  max_acceptable_spread: 0.20
+  
+# Reporting
+reporting:
+  # Track regime-specific metrics
+  track_by_regime: true
+  regime_metrics:
+    - returns_by_regime
+    - win_rate_by_regime
+    - avg_trade_by_regime
+    
+  # Standard metrics
+  track_metrics:
+    - total_return
+    - sharpe_ratio
+    - max_drawdown
+    - win_rate
+    - profit_factor
+    - trades_skipped_by_filter
+    
+# Notes
+notes: |
+  Regime-Filtered Long Call Strategy:
+  - Uses EWMA volatility to identify market regimes
+  - Only trades when volatility is in favorable range (12-40%)
+  - Requires uptrend (EMA20 > EMA50)
+  - Avoids trading during deep drawdowns
+  - Adjusts position size based on market conditions
+  
+  Key Improvements:
+  - Filters out low-vol periods where long calls underperform
+  - Reduces position size in high-risk environments
+  - Uses multiple confirmation signals (vol, trend, RSI)
+  - Adapts parameters based on regime
+  
+  Expected Performance:
+  - Should outperform unfiltered long calls
+  - Lower drawdowns during bear markets
+  - Better risk-adjusted returns
+  - Fewer but higher quality trades

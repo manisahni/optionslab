@@ -1,0 +1,148 @@
+# ZEBRA Call Strategy with 5% OTM Put Protection
+# Zero Extrinsic Back Ratio with downside hedge
+# Buy 2 ITM Calls + Sell 1 OTM Call + Buy 1 Protective Put
+
+name: "ZEBRA Call Spread with 5% Put Hedge"
+description: "ZEBRA call spread with protective put 5% below spot price"
+strategy_type: "custom_spread"
+category: "directional_hedged"
+
+# Strategy Parameters
+parameters:
+  initial_capital: 100000   # Starting capital
+  position_size: 0.10       # 10% of capital per trade
+  max_positions: 3          # Max concurrent positions
+  max_hold_days: 45         # Max days to hold position
+  entry_frequency: 30       # Days between entries (monthly)
+
+# Multi-Leg Configuration
+legs:
+  # Leg 1: Buy 2 ITM Calls
+  - name: "long_itm_calls"
+    type: call
+    direction: long
+    quantity: 2
+    delta_target: 0.55      # 55 delta (ITM)
+    
+  # Leg 2: Sell 1 OTM Call
+  - name: "short_otm_call"
+    type: call
+    direction: short
+    quantity: 1
+    delta_target: 0.30      # 30 delta (OTM)
+    
+  # Leg 3: Buy 1 Protective Put (5% OTM)
+  - name: "protective_put"
+    type: put
+    direction: long
+    quantity: 1
+    strike_offset_pct: -0.05  # 5% below spot price
+
+# Option Selection Configuration
+option_selection:
+  method: "multi_leg"       # Multi-leg selection
+  
+  # ITM Calls Selection
+  leg_1_long_calls:
+    delta_criteria:
+      target: 0.55          # Target 55 delta
+      tolerance: 0.05       # Accept 50-60 delta
+      
+    dte_criteria:
+      target: 45            # Target 45 DTE
+      minimum: 35           # Min 35 days
+      maximum: 60           # Max 60 days
+      
+    liquidity_criteria:
+      min_volume: 100       # Minimum daily volume
+      max_spread_pct: 0.10  # Maximum 10% bid-ask spread
+  
+  # OTM Call Selection
+  leg_2_short_call:
+    delta_criteria:
+      target: 0.30          # Target 30 delta
+      tolerance: 0.05       # Accept 25-35 delta
+      
+    dte_criteria:
+      match_leg_1: true     # Same expiration as leg 1
+      
+    liquidity_criteria:
+      min_volume: 100       # Minimum daily volume
+      max_spread_pct: 0.10  # Maximum 10% bid-ask spread
+      
+  # Protective Put Selection
+  leg_3_protective_put:
+    strike_criteria:
+      method: "percentage_otm"
+      offset_pct: -0.05     # 5% below current price
+      round_to: 1.0         # Round to nearest dollar strike
+      
+    dte_criteria:
+      match_leg_1: true     # Same expiration as calls
+      
+    liquidity_criteria:
+      min_volume: 50        # Lower volume OK for hedge
+      max_spread_pct: 0.15  # Allow wider spread for protection
+
+# Entry Rules  
+entry_rules:
+  market_conditions:
+    min_iv_rank: 0          # No IV requirement
+    max_iv_rank: 100        # No IV requirement
+    
+  position_criteria:
+    net_delta_target: 0.75  # Net delta ~75 (including put)
+    max_net_debit: 0.10     # Max 10% of capital per spread
+    min_risk_reward: 2.0    # Min 2:1 reward/risk ratio
+    
+  timing:
+    avoid_earnings: true    # Skip entry week before earnings
+    avoid_fomc: true        # Skip entry day before FOMC
+
+# Exit Rules
+exit_rules:
+  - condition: "profit_target"
+    target_percent: 40      # Exit at 40% profit (lower due to hedge cost)
+    
+  - condition: "stop_loss"
+    stop_percent: -25       # Exit at 25% loss (tighter with hedge)
+    
+  - condition: "time_stop"
+    days_before_expiry: 7   # Exit 7 days before expiration
+    
+  - condition: "delta_threshold"
+    short_call_delta: 0.70  # Exit if short call reaches 70 delta
+    
+  - condition: "protective_put_itm"
+    put_delta: -0.80       # Exit if put goes deep ITM (market crash)
+
+# Risk Management
+risk_management:
+  max_positions: 3          # Max 3 concurrent ZEBRA spreads
+  position_sizing: "fixed"  # Fixed position size
+  max_position_size: 0.10   # 10% of capital per spread
+  
+  # Greeks limits (position level)
+  max_position_delta: 80    # Lower delta with hedge
+  max_position_gamma: -40   # Lower gamma risk
+  max_position_theta: -80   # Lower theta decay
+  max_position_vega: -150   # Lower vega exposure
+  
+  # Tail risk protection
+  max_portfolio_var_95: 0.05  # Max 5% VaR at 95% confidence
+  max_portfolio_cvar_95: 0.08 # Max 8% CVaR at 95% confidence
+
+# Execution
+execution:
+  price_type: "mid"         # Use mid prices
+  slippage_ticks: 1         # 1 tick slippage per leg
+  commission_per_contract: 0.65  # Commission per contract
+
+# Reporting
+reporting:
+  track_legs_separately: true      # Track each leg P&L
+  calculate_net_greeks: true        # Calculate spread Greeks
+  log_entry_reason: true            # Log why position entered
+  log_exit_reason: true             # Log why position exited
+  track_hedge_effectiveness: true  # Track put hedge performance
+  separate_hedge_pnl: true         # Report hedge P&L separately

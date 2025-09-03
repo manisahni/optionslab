@@ -1,0 +1,174 @@
+# Poor Man's Covered Call (PMCC) Strategy Configuration
+# Combines long-term LEAP ownership with short-term call selling
+
+name: "PMCC (Poor Man's Covered Call)"
+strategy_type: "pmcc"
+description: "Long deep ITM LEAP call with short OTM calls sold against it"
+
+# Capital allocation
+capital:
+  initial: 10000
+  max_positions: 1  # Only one PMCC position at a time
+  
+# LEAP (Long Call) Selection
+leap_selection:
+  # DTE criteria for LEAP selection
+  dte_criteria:
+    minimum: 365    # 1 year minimum
+    maximum: 800    # Up to 2+ years when available
+    
+  # Delta criteria for deep ITM LEAPs
+  delta_criteria:
+    minimum: 0.70   # Deep ITM for lower risk
+    maximum: 0.85   # Not too deep to maintain leverage
+    target: 0.80    # Sweet spot for ITM/leverage balance
+    
+  # Strike selection (as alternative to delta)
+  strike_criteria:
+    moneyness_pct: -15  # 15% ITM (negative = ITM)
+    
+  # Liquidity requirements
+  liquidity_criteria:
+    min_volume: 10     # Minimum daily volume
+    min_open_interest: 50  # Minimum OI for liquidity
+    max_spread_pct: 0.02   # Maximum bid-ask spread (2%)
+    
+  # Roll criteria for LEAP
+  roll_criteria:
+    min_dte: 90        # Roll at 3 months (theta acceleration)
+    force_roll_dte: 60  # Must roll at 2 months
+    
+# Short Call Selection  
+short_call_selection:
+  # DTE criteria for short calls
+  dte_criteria:
+    minimum: 30    # Monthly options
+    maximum: 45    # Up to 45 days
+    target: 35     # Target ~35 DTE
+    
+  # Delta criteria for OTM calls
+  delta_criteria:
+    minimum: 0.20   # Not too far OTM
+    maximum: 0.30   # Not too close (assignment risk)
+    target: 0.25    # Target 25 delta
+    
+  # Strike requirements
+  strike_criteria:
+    min_above_leap: 5    # Minimum $ above LEAP strike
+    min_moneyness_pct: 0.02  # At least 2% OTM
+    
+  # Liquidity requirements
+  liquidity_criteria:
+    min_volume: 100    # Higher volume for short-term options
+    max_spread_pct: 0.10  # Allow wider spreads (10%)
+    
+# Exit Conditions for Short Calls
+short_call_exits:
+  # Profit target
+  profit_target:
+    pct_of_credit: 0.50   # Take profit at 50% of max profit
+    
+  # Time-based exit
+  time_exit:
+    roll_at_dte: 21       # Roll at 3 weeks
+    must_close_dte: 7     # Must close/roll at 1 week
+    
+  # Defensive exits
+  defensive:
+    breach_strike: false   # Don't panic if tested
+    delta_threshold: 0.60  # Consider rolling if delta > 0.60
+    
+# Risk Management
+risk_management:
+  # Position sizing
+  position_sizing:
+    method: "fixed"       # Fixed number of contracts
+    contracts: 1          # Start with 1 contract
+    
+  # Maximum loss
+  max_loss:
+    pct_of_capital: 0.20  # Stop if down 20% on position
+    
+  # Basis tracking
+  basis_management:
+    track_net_basis: true  # Track LEAP cost - premiums collected
+    target_basis_reduction: 0.50  # Try to reduce basis by 50%
+    
+  # Assignment prevention
+  assignment_prevention:
+    monitor_short_itm: true
+    roll_if_itm_dte: 5     # Roll if ITM with < 5 DTE
+    
+# Market Filters (optional)
+market_filters:
+  # VIX filter
+  vix_filter:
+    enabled: false
+    max_vix: 30      # Don't trade if VIX > 30
+    
+  # Trend filter  
+  trend_filter:
+    enabled: false
+    require_uptrend: true
+    sma_period: 50
+    
+# Execution Settings
+execution:
+  # Fill assumptions
+  fill_method: "mid_plus_slippage"
+  slippage_pct: 0.5      # 0.5% slippage
+  
+  # Commission
+  commission_per_contract: 0.65
+  
+  # Order timing
+  entry_time: "09:45"    # Enter after first 15 minutes
+  exit_time: "15:45"     # Exit before last 15 minutes
+  
+# Backtesting Settings
+backtesting:
+  # Data requirements
+  require_greeks: true   # Need Greeks for delta selection
+  require_iv: false      # IV optional but helpful
+  
+  # Validation
+  validate_spreads: true
+  max_acceptable_spread: 0.20  # Skip if spread > 20%
+  
+# Reporting
+reporting:
+  # Metrics to track
+  track_metrics:
+    - total_return
+    - sharpe_ratio
+    - max_drawdown
+    - win_rate
+    - average_credit
+    - basis_reduction
+    - rolls_executed
+    - assignment_frequency
+    
+  # Audit trail
+  audit_level: "detailed"  # Log all trades with reasoning
+  
+# Notes
+notes: |
+  PMCC Strategy Implementation:
+  - Buy deep ITM LEAP call (70-85 delta, 1-2 years out)
+  - Sell monthly OTM calls (20-30 delta) against LEAP
+  - Roll short calls at 50% profit or 21 DTE
+  - Roll LEAP at 90 DTE to avoid theta decay
+  - Track net basis (LEAP cost - premiums collected)
+  - Goal: Reduce cost basis while capturing upside
+  
+  Key Advantages:
+  - Lower capital requirement than covered calls
+  - Leverage from LEAP ownership
+  - Income from short call premiums
+  - Defined maximum risk (LEAP cost)
+  
+  Key Risks:
+  - LEAP can lose value in downtrend
+  - Short call caps upside potential
+  - Early assignment risk on short call
+  - Time decay on LEAP if held too long

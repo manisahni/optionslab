@@ -14,7 +14,7 @@ echo -e "${BLUE}============================================================${NC
 # Check if we're in the right directory
 if [ ! -f "optionslab/app.py" ]; then
     echo -e "${RED}❌ Error: Not in the correct directory!${NC}"
-    echo "Please run this script from the thetadata-api directory"
+    echo "Please run this script from the daily-optionslab directory"
     exit 1
 fi
 
@@ -58,4 +58,4 @@ echo -e "${YELLOW}⌨️  Press Ctrl+C to stop${NC}"
 echo -e "${BLUE}============================================================${NC}\n"
 
 # Run the app
-exec python -m optionslab.app
+exec venv/bin/python -m optionslab.app

@@ -16,7 +16,8 @@ class DataScientistUtils:
     """Utilities for accessing and analyzing SPY options data"""
     
     def __init__(self):
-        self.data_dir = Path(__file__).parent / "data"
+        # Use main data folder instead of optionslab/data
+        self.data_dir = Path(__file__).parent.parent / "data" / "spy_options"
         self.master_file = self.data_dir / "SPY_OPTIONS_MASTER_20200715_20250711.parquet"
         self._cached_data = None
         self._cache_dates = None

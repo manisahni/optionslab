@@ -1,0 +1,117 @@
+# ZEBRA Call Strategy (No Hedge)
+# Zero Extrinsic Back Ratio - Bullish directional spread
+# Buy 2 ITM Calls (~50-60 delta) + Sell 1 OTM Call (~25-30 delta)
+
+name: "ZEBRA Call Spread (No Hedge)"
+description: "Zero Extrinsic Back Ratio call spread - synthetic long stock with limited risk"
+strategy_type: "custom_spread"
+category: "directional"
+
+# Strategy Parameters
+parameters:
+  initial_capital: 100000   # Starting capital
+  position_size: 0.10       # 10% of capital per trade
+  max_positions: 3          # Max concurrent positions
+  max_hold_days: 45         # Max days to hold position
+  entry_frequency: 30       # Days between entries (monthly)
+
+# Multi-Leg Configuration
+legs:
+  # Leg 1: Buy 2 ITM Calls
+  - name: "long_itm_calls"
+    type: call
+    direction: long
+    quantity: 2
+    delta_target: 0.55      # 55 delta (ITM)
+    
+  # Leg 2: Sell 1 OTM Call
+  - name: "short_otm_call"
+    type: call
+    direction: short
+    quantity: 1
+    delta_target: 0.30      # 30 delta (OTM)
+
+# Option Selection Configuration
+option_selection:
+  method: "multi_leg"       # Multi-leg selection
+  
+  # ITM Calls Selection
+  leg_1_long_calls:
+    delta_criteria:
+      target: 0.55          # Target 55 delta
+      tolerance: 0.05       # Accept 50-60 delta
+      
+    dte_criteria:
+      target: 45            # Target 45 DTE
+      minimum: 35           # Min 35 days
+      maximum: 60           # Max 60 days
+      
+    liquidity_criteria:
+      min_volume: 100       # Minimum daily volume
+      max_spread_pct: 0.10  # Maximum 10% bid-ask spread
+  
+  # OTM Call Selection
+  leg_2_short_call:
+    delta_criteria:
+      target: 0.30          # Target 30 delta
+      tolerance: 0.05       # Accept 25-35 delta
+      
+    dte_criteria:
+      match_leg_1: true     # Same expiration as leg 1
+      
+    liquidity_criteria:
+      min_volume: 100       # Minimum daily volume
+      max_spread_pct: 0.10  # Maximum 10% bid-ask spread
+
+# Entry Rules  
+entry_rules:
+  market_conditions:
+    min_iv_rank: 0          # No IV requirement
+    max_iv_rank: 100        # No IV requirement
+    
+  position_criteria:
+    net_delta_target: 0.80  # Net delta ~80 (2*55 - 30)
+    max_net_debit: 0.10     # Max 10% of capital per spread
+    
+  timing:
+    avoid_earnings: true    # Skip entry week before earnings
+    avoid_fomc: true        # Skip entry day before FOMC
+
+# Exit Rules
+exit_rules:
+  - condition: "profit_target"
+    target_percent: 50      # Exit at 50% profit
+    
+  - condition: "stop_loss"
+    stop_percent: -30       # Exit at 30% loss
+    
+  - condition: "time_stop"
+    days_before_expiry: 7   # Exit 7 days before expiration
+    
+  - condition: "delta_threshold"
+    short_call_delta: 0.70  # Exit if short call reaches 70 delta
+
+# Risk Management
+risk_management:
+  max_positions: 3          # Max 3 concurrent ZEBRA spreads
+  position_sizing: "fixed"  # Fixed position size
+  max_position_size: 0.10   # 10% of capital per spread
+  
+  # Greeks limits (position level)
+  max_position_delta: 100   # Max delta per position
+  max_position_gamma: -50   # Max gamma risk
+  max_position_theta: -100  # Max theta decay
+  max_position_vega: -200   # Max vega exposure
+
+# Execution
+execution:
+  price_type: "mid"         # Use mid prices
+  slippage_ticks: 1         # 1 tick slippage per leg
+  commission_per_contract: 0.65  # Commission per contract
+
+# Reporting
+reporting:
+  track_legs_separately: true      # Track each leg P&L
+  calculate_net_greeks: true        # Calculate spread Greeks
+  log_entry_reason: true            # Log why position entered
+  log_exit_reason: true             # Log why position exited

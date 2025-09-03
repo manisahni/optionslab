@@ -47,7 +47,7 @@ from io import StringIO
 
 
 class MinimalThetaDataClient:
-    def __init__(self, base_url="http://127.0.0.1:25510/v2"):
+    def __init__(self, base_url="http://127.0.0.1:25503/v3"):
         self.base_url = base_url
 
     async def list_option_expirations(self, symbol):

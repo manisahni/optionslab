@@ -1,0 +1,54 @@
+# Simple Long Call Strategy - Validated System Test
+# Using structure compatible with backtest_engine.py
+
+name: "Long Call - System Validation"
+strategy_type: "long_call"
+description: "Simple long call strategy for system validation testing"
+
+# Required parameters section
+parameters:
+  initial_capital: 10000
+  commission_per_contract: 0.65
+  max_hold_days: 45
+  position_size: 0.05  # 5% of capital per trade
+  position_size_pct: 0.05  # Alternative naming
+
+# Option selection criteria (required by backtest engine)
+option_selection:
+  # Delta criteria for calls
+  delta_criteria:
+    target: 0.30
+    tolerance: 0.10
+    minimum: 0.20
+    maximum: 0.40
+    
+  # DTE criteria
+  dte_criteria:
+    target: 35
+    minimum: 30
+    maximum: 45
+    
+  # Liquidity criteria
+  liquidity_criteria:
+    min_volume: 50         # Lower for testing
+    max_spread_pct: 0.20   # Allow wider spreads for testing
+
+# Exit rules (compatible with exit_conditions.py)
+exit_rules:
+  - condition: "profit_target"
+    threshold: 50.0  # 50% profit target
+    
+  - condition: "stop_loss" 
+    threshold: -30.0  # 30% stop loss
+    
+  - condition: "time_stop"
+    dte_threshold: 7  # Exit at 7 DTE
+
+# Market filters (optional)
+market_filters:
+  enabled: false
+
+# Execution settings
+execution:
+  fill_method: "close_price"
+  commission_per_contract: 0.65
