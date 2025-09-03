@@ -2,6 +2,45 @@
 
 All notable changes to the OptionsLab project will be documented in this file.
 
+## [3.0.0] - 2025-09-03
+
+### Added
+- **Centralized Backtest Management System**: Complete infrastructure for managing backtests
+  - Automatic storage organization by year/strategy/timestamp
+  - Result indexing and search capabilities
+  - Comparison tools for multiple strategies
+  - Integration with notebooks and Gradio UI
+  
+- **Market Regime Detection**: EWMA-based volatility analysis
+  - Three-regime classification (Low/Normal/High volatility)
+  - Historical regime performance tracking
+  - Major drawdown identification
+  - Regime-filtered strategy configurations
+  
+- **Comprehensive Analysis Framework**: Multi-period testing
+  - Mandatory test periods (2022 bear, 2023 recovery, etc.)
+  - 5+ year dataset analysis (July 2020 - July 2025)
+  - Automated performance comparison across periods
+  
+- **Enhanced Documentation**: Reorganized and expanded
+  - Split oversized CLAUDE.md into focused documents
+  - Created BACKTEST_USAGE_GUIDE.md for step-by-step instructions
+  - Added backtests/README.md for system documentation
+  - Updated SYSTEM_CAPABILITIES.md with latest features
+
+### Changed
+- Documentation structure reorganized for better memory management
+- Increased dataset coverage to 1,266 trading days
+- Enhanced backtest storage with automatic indexing
+- Improved market filter integration with regime detection
+
+### Technical
+- Created `backtests/backtest_manager.py` for centralized management
+- Added `backtests/market_regime_analyzer.py` for volatility analysis
+- Implemented `backtests/run_comprehensive_analysis.py` for multi-period testing
+- Built `backtests/gradio_results_viewer.py` for UI integration
+- Added regime-filtered strategy configs (e.g., `long_call_regime_filtered.yaml`)
+
 ## [2.0.0] - 2025-07-23
 
 ### Added

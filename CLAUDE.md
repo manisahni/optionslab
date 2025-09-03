@@ -24,6 +24,8 @@ For comprehensive instructions on specific topics, see:
 - **[NOTEBOOK_STANDARDS.md](./NOTEBOOK_STANDARDS.md)** - Research notebook guidelines
 - **[TESTING_METHODOLOGY.md](./TESTING_METHODOLOGY.md)** - 5-phase testing approach
 - **[SYSTEM_CAPABILITIES.md](./SYSTEM_CAPABILITIES.md)** - Advanced position management features
+- **[backtests/README.md](./backtests/README.md)** - Centralized backtest management system
+- **[BACKTEST_USAGE_GUIDE.md](./BACKTEST_USAGE_GUIDE.md)** - Step-by-step backtesting guide
 
 ## Project Architecture
 
@@ -220,6 +222,24 @@ python -m pytest tests/ -v
 ```
 
 ## 📊 Comprehensive Backtesting Guidelines
+
+### Centralized Backtest Management System
+We have a **centralized system** for managing all backtests. See [backtests/README.md](./backtests/README.md) for details.
+
+**Quick Commands:**
+```python
+# Run single backtest
+from backtests.backtest_manager import BacktestManager
+manager = BacktestManager()
+results = manager.run_backtest('config/long_call_simple.yaml', '2023-01-01', '2024-12-31')
+
+# Run comprehensive analysis across all periods
+from backtests.run_comprehensive_analysis import run_comprehensive_backtest
+results = run_comprehensive_backtest('config/long_call_regime_filtered.yaml')
+
+# View results in UI
+# python backtests/gradio_results_viewer.py
+```
 
 ### ALWAYS Use Full Available Dataset
 We have **5+ years of daily SPY options data** (July 2020 - July 2025) covering:
